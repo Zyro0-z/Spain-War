@@ -61,6 +61,8 @@ export class MapView {
     /** @type {Set<number>} candidatas */ this.cands = new Set();
     /** @type {{p:number, from:string, to:string, ox:number, oy:number, t0:number, dur:number, gray:boolean}|null} */ this.wave = null;
     this.labels = true;
+    /** Desplazamiento vertical de los nombres (px), para dejar sitio a las fichas de ejército. */ this.labelDy = 0;
+    /** @type {((cam:Cam) => void)|null} aviso en cada fotograma (capa de fichas y flechas) */ this.onCam = null;
     /** @type {number} bando del jugador (se marca su territorio en oro) */ this.me = -1;
     this.contrast = false;
     this.theme = 'marina';
@@ -135,9 +137,13 @@ export class MapView {
   }
   /** Provincia bajo un punto de la pantalla. @param {number} sx @param {number} sy */
   hit(sx, sy) {
-    const [x, y] = this.toMap(sx, sy);
-    for (let i = 0; i < this.paths.length; i++) if (this.ctx.isPointInPath(this.paths[i], x, y, 'evenodd')) return i;
-    return -1;
+    const [x, y] = this.toMap(sx, sy), c = this.ctx;
+    // isPointInPath aplica la transformación del contexto: se mide sin ella
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
+    let hit = -1;
+    for (let i = 0; i < this.paths.length; i++) if (c.isPointInPath(this.paths[i], x, y, 'evenodd')) { hit = i; break; }
+    c.restore();
+    return hit;
   }
 
   /* ---------- Estado visible ---------- */
@@ -242,6 +248,7 @@ export class MapView {
   /** Brillo del color del bando en sus fronteras con otros bandos. @param {CanvasRenderingContext2D} x @param {number} p @param {number} u @param {number} [boost] */
   glowProvince(x, p, u, boost = 1) {
     const f = this.owner[p], col = this.colors[f], keys = [];
+    if (f < 0 || !col) return;
     for (const q of this.map.provinces[p].adj) if (this.owner[q] !== f) keys.push(borderKey(p, q));
     const outer = this.outerPaths[p];
     x.save(); x.clip(this.paths[p], 'evenodd');
@@ -300,7 +307,13 @@ export class MapView {
     x.restore();
   }
   /** @param {number} p */
-  provColor(p) { const f = this.owner[p]; return this.dead[f] ? desaturate(this.colors[f], .9) : this.colors[f]; }
+  provColor(p) {
+    const f = this.owner[p];
+    if (f < 0 || !this.colors[f]) return this.theme === 'atlas' ? '#CDBF9F' : '#3A4560';
+    return this.dead[f] ? desaturate(this.colors[f], .9) : this.colors[f];
+  }
+  /** Colores por bando (modo conquista). @param {string[]} colors */
+  setColors(colors) { this.colors = colors; this.rebuild(); this.invalidate(); }
 
   /* ---------- Bucle de dibujo ---------- */
   invalidate() { this.dirty = true; if (!this.raf) this.raf = requestAnimationFrame(t => this.frame(t)); }
@@ -346,7 +359,7 @@ export class MapView {
     x.setTransform(1, 0, 0, 1, 0, 0);
     if (still) {
       // Cámara quieta: el fondo (mapa, atenuado, provincias activas y nombres) se pinta una vez a tamaño de pantalla
-      const key = [c.x, c.y, c.s, dim, [...this.active].join(','), this.labels, this.me, this.version, this.canvas.width, this.canvas.height, this.wave ? this.wave.p : -1].join('|');
+      const key = [c.x, c.y, c.s, dim, [...this.active].join(','), this.labels, this.labelDy, this.me, this.version, this.canvas.width, this.canvas.height, this.wave ? this.wave.p : -1].join('|');
       if (key !== this.snapKey) {
         const sn = this.snap || (this.snap = document.createElement('canvas'));
         if (sn.width !== this.canvas.width || sn.height !== this.canvas.height) { sn.width = this.canvas.width; sn.height = this.canvas.height; }
@@ -399,6 +412,7 @@ export class MapView {
       x.restore();
     }
     this.dirty = false;
+    if (this.onCam) this.onCam(this.cam);
   }
   /** Fondo: retícula, mapa en memoria, atenuado, provincias activas y nombres. @param {CanvasRenderingContext2D} x @param {number} dim @param {number} d escala de píxeles */
   renderStatic(x, dim, d) {
@@ -470,7 +484,7 @@ export class MapView {
       let a = clamp((room - 9) / 6, 0, 1);
       if (act) a = 1; else if (dim > 0) a *= 1 - dim * .85;
       if (a <= .02) continue;
-      const [sx, sy] = this.toScreen(p.label[0], p.label[1]);
+      const [sx, sy0] = this.toScreen(p.label[0], p.label[1]), sy = sy0 + this.labelDy;
       if (sx < -40 || sx > this.W + 40 || sy < -20 || sy > this.H + 20) continue;
       x.globalAlpha = a;
       x.font = `${act ? 700 : 600} ${size.toFixed(1)}px 'Barlow Condensed','Arial Narrow',sans-serif`;

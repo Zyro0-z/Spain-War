@@ -41,6 +41,20 @@ export const VERSION = 1;
  * @property {{id:string, name:string}} profile
  * @property {Online|null} online
  * @property {{me:number, level:string}} solo últimas elecciones del modo un jugador
+ * @property {{scenario:string, me:number, diff:string}} war últimas elecciones del modo conquista
+ * @property {WarSave[]} saves partidas de conquista guardadas (máximo 5)
+ */
+/**
+ * @typedef {object} WarSave
+ * @property {string} id
+ * @property {number} at
+ * @property {string} scenario
+ * @property {number} me
+ * @property {string} diff
+ * @property {string} name nombre del bando
+ * @property {number} turn
+ * @property {boolean} over
+ * @property {import('./conquest/engine.js').Game} game
  */
 
 /** @returns {State} */
@@ -54,6 +68,8 @@ export function fresh() {
     profile:{id:Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 8), name:''},
     online:null,
     solo:{me:-1, level:'estratega'},
+    war:{scenario:'las47', me:-1, diff:'facil'},
+    saves:[],
   };
 }
 
@@ -77,6 +93,8 @@ export function migrate(s) {
     profile:{...f.profile, ...(s.profile && typeof s.profile.id === 'string' ? s.profile : {})},
     online:on,
     solo:{...f.solo, ...(s.solo || {})},
+    war:{...f.war, ...(s.war || {})},
+    saves:Array.isArray(s.saves) ? s.saves.filter((/** @type {any} */ x) => x && x.game && x.game.v === 2 && Array.isArray(x.game.P?.owner)).slice(0, 5) : [],
   };
 }
 

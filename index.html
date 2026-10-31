@@ -25,6 +25,7 @@
   <div class="bg" aria-hidden="true"></div>
   <canvas id="map" role="img" aria-label="Mapa de España por provincias"></canvas>
   <div class="vignette" aria-hidden="true"></div>
+  <svg id="ov" aria-hidden="true" style="display:none"></svg>
 
   <section class="screen menu" id="menu" aria-label="Menú principal"></section>
 
@@ -36,6 +37,12 @@
     <div class="banner" id="banner" role="status" aria-live="off"></div>
     <div class="wheelbox" id="wheelbox" hidden></div>
     <div class="dock" id="dock"></div>
+  </section>
+
+  <section class="screen war" id="war" aria-label="Conquista" hidden>
+    <header class="hud" id="wHud"></header>
+    <div class="banner" id="wBanner" role="status" aria-live="off"></div>
+    <div class="dock" id="wBar"></div>
   </section>
 
   <div class="overlay" id="victory" role="dialog" aria-modal="true" aria-labelledby="vTitle" hidden></div>

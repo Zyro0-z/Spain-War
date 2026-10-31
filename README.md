@@ -16,27 +16,21 @@ Estrategia por turnos con las 47 provincias de la España peninsular. Una ruleta
 1. Abre **https://zyro0-z.github.io/Spain-War/** en Safari.
 2. Pulsa **Compartir › Añadir a pantalla de inicio**.
 
-## Reglas
+## Cómo se juega
 
-- Al empezar, cada provincia es un bando con poder 100. El poder y la eliminación son del bando.
-- Cada ronda, la ruleta elige un bando vivo, que ataca una provincia enemiga limítrofe con alguna suya. El defensor es su dueño.
-- Cada bando tira 3d6. Puntuación = suma × poder/100. Si empatan, se repite la tirada.
-- El ganador suma 3 de poder y el perdedor resta 3 (mínimo 1). Si gana el atacante, conquista la provincia.
-- Un bando sin provincias queda eliminado. La partida termina cuando queda uno.
-- Antes de cada combate se muestra la probabilidad exacta de victoria (convolución de 3d6 con ambos poderes).
+**Conquista** (un jugador): eliges escenario (las 47 provincias, las comunidades autónomas o los reinos hacia 1200), tu bando y la dificultad. En tu turno tocas una provincia para atacar, mover tropas, reclutar, construir, espiar o hablar con otro bando; al terminar el turno actúan los bots.
 
-## Modos
+- Combate con dados: cada lado tira 3d6 y gana quien saque más con «suma × fuerza». La fuerza sale de las tropas, el terreno, los edificios, la moral y los generales, y la probabilidad exacta se ve antes de atacar.
+- Oro por provincia según su población; con él reclutas, construyes y haces diplomacia.
+- Diplomacia: paz, pacto de no agresión, alianza, regalos, tributo y anexión pacífica. Antes de proponer ves si aceptarán y por qué. Romper un pacto es traición: todos desconfían.
+- Dificultad: **Fácil**, todos en paz y solo pelea contigo quien atacas · **Normal**, los bots se hacen la guerra y te atacan si te ven débil o si creces mucho · **Difícil**, guerra total y coalición contra el líder.
+- Las partidas se guardan solas (hasta 5) y puedes deshacer movimientos, reclutas y edificios hasta tu último ataque.
 
-- **Normal**: simulación automática con pausa y velocidad x1, x2 y x5. La semilla reproduce la partida exacta en cualquier móvil (`?semilla=CÓDIGO`).
-- **Un jugador**: eliges tu provincia (en el mapa o en la lista) y el resto son bots. Cuando la ruleta te elige, atacas a una provincia enemiga limítrofe viendo la probabilidad de cada una; tienes 12 s y, si se agotan, se ataca al mejor objetivo.
-  - Recluta: ataca al azar.
-  - Estratega: busca la mejor probabilidad y evita a los rivales mucho más fuertes.
-  - Mariscal: además remata a los bandos con una sola provincia. En 1500 partidas simuladas, Estratega y Mariscal ganan el ~57 % de los duelos contra Recluta y empatan entre sí; priorizar «cerrar frentes» le hacía perder, así que no lo hace.
-- **Multijugador** (2 a 8 móviles, necesita internet): sala con código de 6 caracteres, enlace y QR. Cada persona controla un bando y el resto son bots; se puede entrar a mirar.
-  - El anfitrión es la autoridad: ejecuta el motor, tira los dados y valida las decisiones; los invitados solo mandan su objetivo.
-  - Mensajes por [ntfy.sh](https://ntfy.sh): todas las rondas de bots hasta el siguiente turno humano van en un solo mensaje (troceado si pasa de 3,8 KB), y ante un 429 se reintenta con espera creciente.
-  - Si cierras Safari, al volver recupera lo perdido con `poll=1&since=`. Si el anfitrión desaparece más de 20 s, la partida se pausa y sigue cuando vuelve. El anfitrión mantiene la pantalla encendida (Wake Lock).
-  - Velocidad x1 o x2 (sin x5 en online).
+Reglas completas y números en [docs/DISENO.md](docs/DISENO.md).
+
+**Espectador**: las 47 provincias luchan solas con ruleta y dados (el modo original). La semilla repite la partida exacta (`?semilla=CÓDIGO`).
+
+**Multijugador** (2 a 8 móviles, necesita internet): sala con código, enlace y QR. De momento usa el sistema de ruleta; se pasará al de conquista.
 
 ## Accesibilidad y ajustes
 

@@ -1,5 +1,5 @@
 // Guarda la app para que funcione sin conexión. Sube la versión de CACHE en cada cambio publicado.
-const CACHE = 'eeg-v2';
+const CACHE = 'eeg-v3';
 const CORE = [
   './', './index.html', './manifest.webmanifest', './apple-touch-icon.png', './icon-512.png', './css/app.css', './data/map.json', './data/flags.json',
   './fonts/barlow-condensed-500.woff2', './fonts/barlow-condensed-600.woff2', './fonts/barlow-condensed-700.woff2', './fonts/barlow-condensed-800.woff2',
@@ -8,6 +8,8 @@ const CORE = [
   './js/net/transport.js', './js/net/room.js',
   './js/ui/dom.js', './js/ui/clock.js', './js/ui/wheel.js', './js/ui/dice.js', './js/ui/play.js', './js/ui/drivers.js',
   './js/ui/menu.js', './js/ui/settings.js', './js/ui/setup.js', './js/ui/online.js',
+  './js/conquest/data.js', './js/conquest/engine.js', './js/conquest/turn.js', './js/conquest/scenarios.js',
+  './js/ui/conquest.js', './js/ui/overlay.js', './js/ui/gestures.js', './js/ui/warsetup.js',
 ];
 
 // Además de lo anterior, las banderas que estén descargadas (data/flags.json dice cuáles)
