@@ -193,3 +193,14 @@ test('rebeliones: provincia poco leal y sin tropas puede rebelarse', () => {
   }
   assert.ok(rebelled);
 });
+
+test('victoria por capitales: cuentan las capitales originales aunque el bando caiga', () => {
+  let g = E.createGame(geo, scenario(map, 'comunidades', colors), {seed:'CAP', humans:[10], rules:{difficulty:'facil', events:false, victory:{type:'capitales', n:2}}});
+  const tol = P('Toledo'), me = 10;
+  // Madrid conquista la capital de Castilla-La Mancha
+  g.P.troops[P('Madrid')] = g.P.ready[P('Madrid')] = 200;
+  for (let i = 0; i < 10 && g.P.owner[tol] !== me; i++) g = act(g, {type:'attack', f:me, from:P('Madrid'), to:tol, n:Math.min(g.P.ready[P('Madrid')], g.P.troops[P('Madrid')] - 1)});
+  assert.equal(g.P.owner[tol], me);
+  assert.equal(g.over, true, 'Madrid + Toledo = 2 capitales');
+  assert.equal(g.winner, me);
+});

@@ -213,11 +213,92 @@ async function main() {
   validate(data);
   fs.mkdirSync(path.dirname(OUT), {recursive:true});
   fs.writeFileSync(OUT, JSON.stringify(data));
+  const rel = relief(proj, W, H, kmPerUnit);
+  fs.writeFileSync(path.join(ROOT, 'data/relief.png'), rel);
+  console.log(`data/relief.png: ${(rel.length / 1024).toFixed(0)} KB`);
   const size = fs.statSync(OUT).size;
   console.log(`data/map.json: ${provinces.length} provincias, ${Object.keys(borders).length} fronteras, ${W}×${H}, ${(size / 1024).toFixed(0)} KB`);
   console.log('Fronteras más cortas:', lengths.sort((a, b) => a[2] - b[2]).slice(0, 6).map(([a, b, k]) => `${a}–${b} ${k} km`).join(', '));
   const trev = provinces.find(p => p.ine === '09');
   console.log(`Burgos: ${trev?.parts} polígonos (incluye el Condado de Treviño)`);
+}
+
+/* ---------- Relieve sombreado ---------- */
+// No hay datos de elevación accesibles: se modela la altura a partir de las cordilleras principales
+// (líneas de cumbres aproximadas en lon/lat, altura relativa y anchura en km) más ruido fractal,
+// y se calcula el sombreado con luz del noroeste. Sale data/relief.png (gris = luz, alfa = cuánto relieve).
+const RANGES = [
+  {h:1, w:34, line:[[-1.75, 43.05], [-1.0, 42.95], [-0.4, 42.8], [0.3, 42.68], [0.9, 42.62], [1.5, 42.5], [2.2, 42.42], [3.1, 42.45]]}, // Pirineos
+  {h:.85, w:28, line:[[-7.1, 42.85], [-6.4, 42.95], [-5.7, 43.0], [-4.9, 43.13], [-4.2, 43.05], [-3.6, 43.05], [-3.0, 43.05]]}, // Cantábrica
+  {h:.9, w:12, line:[[-4.85, 43.19]]}, // Picos de Europa
+  {h:.5, w:24, line:[[-3.0, 43.05], [-2.3, 43.0], [-1.8, 43.0]]}, // Montes Vascos
+  {h:.6, w:30, line:[[-8.0, 42.4], [-7.4, 42.3], [-6.8, 42.35], [-6.3, 42.45]]}, // Macizo Galaico y Montes de León
+  {h:.7, w:38, line:[[-3.3, 42.15], [-2.6, 41.95], [-2.0, 41.6], [-1.6, 41.0], [-1.2, 40.5], [-0.7, 40.2], [-0.3, 40.0]]}, // Sistema Ibérico
+  {h:.6, w:14, line:[[-1.84, 41.79]]}, // Moncayo
+  {h:.85, w:26, line:[[-7.0, 40.2], [-6.2, 40.25], [-5.5, 40.3], [-5.0, 40.3], [-4.4, 40.55], [-3.9, 40.8], [-3.4, 41.05], [-3.0, 41.2]]}, // Sistema Central
+  {h:.9, w:14, line:[[-5.2, 40.25]]}, // Gredos
+  {h:.4, w:24, line:[[-5.2, 39.45], [-4.5, 39.5], [-3.9, 39.45]]}, // Montes de Toledo
+  {h:.45, w:28, line:[[-7.2, 37.95], [-6.3, 38.05], [-5.5, 38.15], [-4.6, 38.3], [-3.7, 38.35], [-2.8, 38.45]]}, // Sierra Morena
+  {h:.8, w:32, line:[[-5.6, 36.75], [-4.8, 36.95], [-4.1, 37.0], [-3.4, 37.05], [-2.7, 37.2], [-2.2, 37.55], [-1.6, 38.0], [-0.9, 38.45]]}, // Béticos
+  {h:1, w:14, line:[[-3.3, 37.06]]}, // Sierra Nevada
+  {h:.6, w:18, line:[[-2.9, 37.9]]}, // Cazorla
+  {h:.5, w:28, line:[[-1.95, 40.25]]}, // Serranía de Cuenca
+  {h:.5, w:24, line:[[-0.3, 40.55]]}, // Maestrazgo
+  {h:.35, w:20, line:[[0.9, 41.3], [1.6, 41.6], [2.3, 41.85], [2.7, 42.1]]}, // Cordilleras costeras catalanas
+];
+/** PNG en escala de grises con alfa (tipo 4), sin dependencias. @param {number} w @param {number} h @param {Uint8Array} ga */
+function png(w, h, ga) {
+  const crcT = new Int32Array(256).map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; return c; });
+  const crc = (/** @type {Buffer} */ b) => { let c = -1; for (const x of b) c = crcT[(c ^ x) & 255] ^ (c >>> 8); return (c ^ -1) >>> 0; };
+  const chunk = (/** @type {string} */ type, /** @type {Buffer} */ data) => {
+    const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
+    const td = Buffer.concat([Buffer.from(type), data]), c = Buffer.alloc(4); c.writeUInt32BE(crc(td));
+    return Buffer.concat([len, td, c]);
+  };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 4;
+  const raw = Buffer.alloc(h * (1 + w * 2));
+  for (let y = 0; y < h; y++) { raw[y * (1 + w * 2)] = 0; Buffer.from(ga.buffer, y * w * 2, w * 2).copy(raw, y * (1 + w * 2) + 1); }
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw, {level:9})), chunk('IEND', Buffer.alloc(0))]);
+}
+/** @param {import('d3-geo').GeoProjection} proj @param {number} W @param {number} H @param {number} kmPerUnit */
+function relief(proj, W, H, kmPerUnit) {
+  const sc = 2, w = Math.round(W / sc), h = Math.round(H / sc);
+  const lines = RANGES.map(r => ({h:r.h, w:r.w / kmPerUnit, pts:r.line.map(p => /** @type {[number, number]} */ (proj(/** @type {[number, number]} */ (p))))}));
+  // ruido de valores con varias octavas (determinista)
+  const hash = (/** @type {number} */ x, /** @type {number} */ y) => { let n = x * 374761393 + y * 668265263; n = (n ^ (n >>> 13)) * 1274126177; return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
+  const vnoise = (/** @type {number} */ x, /** @type {number} */ y) => {
+    const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    const a = hash(xi, yi), b = hash(xi + 1, yi), c = hash(xi, yi + 1), d = hash(xi + 1, yi + 1);
+    return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+  };
+  const fbm = (/** @type {number} */ x, /** @type {number} */ y) => { let v = 0, amp = .5, f = 1; for (let o = 0; o < 4; o++) { v += amp * vnoise(x * f, y * f); amp *= .45; f *= 2.05; } return v; };
+  const dem = new Float32Array(w * h);
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+    const x = i * sc, y = j * sc;
+    let z = 0;
+    for (const L of lines) {
+      let d = Infinity;
+      for (let k = 0; k < L.pts.length; k++) {
+        const [ax, ay] = L.pts[k], [bx, by] = L.pts[Math.min(k + 1, L.pts.length - 1)];
+        const dx = bx - ax, dy = by - ay, l = dx * dx + dy * dy, t = l ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / l)) : 0;
+        d = Math.min(d, Math.hypot(x - ax - t * dx, y - ay - t * dy));
+      }
+      z += L.h * Math.exp(-((d / L.w) ** 2));
+    }
+    const n = fbm(x / 16, y / 16);
+    dem[j * w + i] = z * (.6 + .8 * n) + .05 * fbm(x / 40 + 7, y / 40);
+  }
+  const out = new Uint8Array(w * h * 2), az = 315 * Math.PI / 180, alt = 45 * Math.PI / 180, zf = 11;
+  for (let j = 1; j < h - 1; j++) for (let i = 1; i < w - 1; i++) {
+    const k = j * w + i;
+    const gx = (dem[k + 1] - dem[k - 1]) * zf / 2, gy = (dem[k + w] - dem[k - w]) * zf / 2;
+    const slope = Math.atan(Math.hypot(gx, gy)), aspect = Math.atan2(gy, -gx);
+    const shade = Math.cos(alt) * Math.cos(slope) + Math.sin(alt) * Math.sin(slope) * Math.cos(az - aspect);
+    const flat = Math.cos(alt);
+    out[k * 2] = Math.max(0, Math.min(255, Math.round(128 + (shade - flat) * 190)));
+    out[k * 2 + 1] = Math.max(0, Math.min(255, Math.round(Math.min(1, dem[k] * 1.4) ** .8 * 255)));
+  }
+  return png(w, h, out);
 }
 
 /** Simetría, conexión y Treviño. También lo comprueban las pruebas. */

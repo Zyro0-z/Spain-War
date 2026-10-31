@@ -88,7 +88,7 @@ export const DIFFICULTY = {
  * @property {Rules} rules
  * @property {number[]} humans bandos humanos
  * @property {{owner:number[], troops:number[], ready:number[], bld:string[], loyal:number[], origin:number[], active:boolean[]}} P
- * @property {{name:string[], flag:number[], color:string[], capital:number[], gold:number[], morale:number[], alive:boolean[], tech:number[][], trait:string[]}} F
+ * @property {{name:string[], flag:number[], color:string[], capital:number[], home:number[], gold:number[], morale:number[], alive:boolean[], tech:number[][], trait:string[]}} F
  * @property {number[][]} rel relación −100..100 (simétrica)
  * @property {number[][]} st estado diplomático
  * @property {number[][]} until fin del pacto
@@ -137,7 +137,7 @@ export function createGame(geo, sc, o) {
     v:2, seed:o.seed, rng, turn:1, winner:-1, over:false, scenario:sc.id, rules, humans:[...o.humans],
     P:{owner, troops, ready:[...troops], bld:new Array(geo.n).fill(''), loyal:owner.map(f => f < 0 ? 0 : 100), origin:[...owner], active},
     F:{name:[...sc.factions.map(f => f.name), 'Rebeldes'], flag:[...sc.factions.map(f => f.flag), -1], color:[...sc.factions.map(f => f.color), '#6B6F7A'],
-      capital, gold:new Array(nf + 1).fill(20), morale:new Array(nf + 1).fill(100), alive:[...sc.factions.map(() => true), false],
+      capital, home:[...capital], gold:new Array(nf + 1).fill(20), morale:new Array(nf + 1).fill(100), alive:[...sc.factions.map(() => true), false],
       tech:Array.from({length:nf + 1}, () => [0, 0, 0, 0]), trait},
     rel:sq(0), st:sq(PEACE), until:sq(0),
     gens:[], genSeq:0, intel:[], fx:[], offers:[],
@@ -629,7 +629,7 @@ export function checkVictory(geo, g) {
     if (!alive[f]) continue;
     if (c[f] === act) return end(f, 'dominacion');
     if (v.type === 'capitales') {
-      let caps = 0; for (let x = 0; x < R; x++) if (g.F.capital[x] >= 0 && g.P.owner[g.F.capital[x]] === f) caps++;
+      let caps = 0; for (let x = 0; x < R; x++) { const h = (g.F.home || g.F.capital)[x]; if (h >= 0 && g.P.owner[h] === f) caps++; }
       if (caps >= (v.n || 5)) return end(f, 'capitales');
     }
     if (v.type === 'diplomatica' && c[f] * 100 >= act * 30) {

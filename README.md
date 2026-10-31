@@ -24,6 +24,8 @@ Estrategia por turnos con las 47 provincias de la España peninsular. Una ruleta
 - Oro por provincia según su población; con él reclutas, construyes y haces diplomacia.
 - Diplomacia: paz, pacto de no agresión, alianza, regalos, tributo y anexión pacífica. Antes de proponer ves si aceptarán y por qué. Romper un pacto es traición: todos desconfían.
 - Dificultad: **Fácil**, todos en paz y solo pelea contigo quien atacas · **Normal**, los bots se hacen la guerra y te atacan si te ven débil o si creces mucho · **Difícil**, guerra total y coalición contra el líder.
+- Profundidad: terreno (montañas y sierras defienden mejor), suministro desde tu capital, lealtad y rebeliones en lo conquistado, edificios (fortaleza, cuartel, puerto, mercado), árbol de mejoras (logística, artillería, diplomacia, espionaje), generales con habilidades que suben de nivel, espionaje, eventos y estaciones con nieve en invierno.
+- Reglas opcionales: niebla de guerra, eventos, estaciones y tipo de victoria (dominación, capitales, diplomática o puntos).
 - Las partidas se guardan solas (hasta 5) y puedes deshacer movimientos, reclutas y edificios hasta tu último ataque.
 
 Reglas completas y números en [docs/DISENO.md](docs/DISENO.md).

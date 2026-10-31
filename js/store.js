@@ -41,7 +41,7 @@ export const VERSION = 1;
  * @property {{id:string, name:string}} profile
  * @property {Online|null} online
  * @property {{me:number, level:string}} solo últimas elecciones del modo un jugador
- * @property {{scenario:string, me:number, diff:string}} war últimas elecciones del modo conquista
+ * @property {{scenario:string, me:number, diff:string, rules?:any}} war últimas elecciones del modo conquista
  * @property {WarSave[]} saves partidas de conquista guardadas (máximo 5)
  */
 /**

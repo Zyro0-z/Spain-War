@@ -468,3 +468,37 @@ svg{display:block}
 .who b{font-size:19px}
 .toast{top:calc(var(--st) + 112px);bottom:auto;transform:translate(-50%,-14px)}
 .toast.show{transform:translate(-50%,0)}
+
+/* Día y noche, nubes, frentes y humo */
+.tint{position:absolute;inset:0;pointer-events:none;z-index:1;mix-blend-mode:multiply;opacity:0;transition:opacity 1.6s ease,background 1.6s ease}
+.clouds{position:absolute;inset:0;pointer-events:none;z-index:1;overflow:hidden;opacity:.55}
+.clouds i{position:absolute;width:70vmax;height:40vmax;border-radius:50%;background:radial-gradient(closest-side,rgba(255,255,255,.10),rgba(255,255,255,0));filter:blur(8px);animation:cloud 90s linear infinite}
+.clouds i::after{content:"";position:absolute;inset:0;border-radius:50%;background:radial-gradient(closest-side,rgba(0,0,10,.16),transparent);transform:translate(6vmax,9vmax);z-index:-1}
+.clouds i:nth-child(1){top:5%;left:-70vmax;animation-duration:110s}
+.clouds i:nth-child(2){top:45%;left:-70vmax;animation-duration:140s;animation-delay:-60s;opacity:.8}
+.clouds i:nth-child(3){top:70%;left:-70vmax;animation-duration:125s;animation-delay:-30s;opacity:.6}
+@keyframes cloud{to{transform:translateX(200vmax)}}
+:root[data-reduced] .clouds{display:none}
+:root[data-theme="atlas"] .clouds{display:none}
+.front{fill:none;stroke:#FF4D3D;stroke-width:3;stroke-linecap:round;animation:frontPulse 1.6s ease-in-out infinite}
+.front-glow{fill:none;stroke:rgba(255,77,61,.28);stroke-width:10;stroke-linecap:round}
+@keyframes frontPulse{50%{stroke:#FFB0A0;opacity:.75}}
+.smoke circle{fill:rgba(60,56,52,.5);animation:smoke 2.4s ease-out infinite}
+.smoke circle:nth-child(2){animation-delay:.8s}.smoke circle:nth-child(3){animation-delay:1.6s}
+.smoke .ember{fill:#FF9A3C;animation:ember 1.2s ease-in-out infinite}
+@keyframes smoke{0%{transform:translate(0,0) scale(.4);opacity:0}20%{opacity:.8}100%{transform:translate(6px,-26px) scale(1.6);opacity:0}}
+@keyframes ember{50%{opacity:.3}}
+.techs{display:grid;gap:8px}
+.tech{display:grid;grid-template-columns:1fr auto;align-items:center;gap:6px;padding:10px 12px;border-radius:14px;background:var(--fill)}
+.tech b{font:800 18px/1 var(--display);text-transform:uppercase;letter-spacing:.03em}
+.tech small{display:block;color:var(--ink2);font-size:12px;margin-top:3px}
+.tech .lv{display:flex;gap:4px;margin-top:6px}
+.tech .lv i{width:22px;height:5px;border-radius:3px;background:var(--fill2)}
+.tech .lv i.on{background:linear-gradient(90deg,#FFE58A,#D49B22)}
+.tech .btn{min-height:38px;font-size:15px;padding:0 12px}
+.rulesrow .rowi select{appearance:none;-webkit-appearance:none;border:0;background:var(--fill2);color:var(--ink);border-radius:10px;padding:7px 10px;font:600 14px var(--ui)}
+details.adv{margin:4px 0 10px}
+details.adv summary{list-style:none;cursor:pointer;font:700 12px/1 var(--display);letter-spacing:.2em;color:var(--ink3);text-transform:uppercase;margin:10px 6px}
+details.adv summary::-webkit-details-marker{display:none}
+details.adv summary::after{content:" +"}
+details.adv[open] summary::after{content:" −"}

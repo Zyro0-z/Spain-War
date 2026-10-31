@@ -71,6 +71,14 @@ export class MapView {
     this.adaptive = true;
     this.raf = 0; this.dirty = true;
     this.noise = noiseTile();
+    /** @type {HTMLImageElement|null} relieve sombreado (data/relief.png) */ this.relief = null;
+    /** @type {HTMLCanvasElement|null} */ this.snowMask = null;
+    /** Invierno: nieve en las montañas. */ this.winter = false;
+    if (typeof Image !== 'undefined') {
+      const img = new Image();
+      img.onload = () => { this.relief = img; this.rebuild(); this.invalidate(); };
+      img.src = 'data/relief.png';
+    }
     /** @type {HTMLCanvasElement|null} */ this.cache = null;
     this.cacheK = 1;
     this.frameTimes = /** @type {number[]} */ ([]);
@@ -272,6 +280,8 @@ export class MapView {
     x.fillStyle = P.neutral; x.fill(this.neutral, 'evenodd');
     x.strokeStyle = P.neutralEdge; x.lineWidth = 1.1 * u; x.stroke(this.neutral);
     x.restore();
+    // líneas de agua alrededor de la costa (como en los mapas antiguos)
+    if (!only) this.waterlines(x, k, u);
     // sombra de la península y luz de costa
     x.save();
     x.shadowColor = P.shadow; x.shadowBlur = 26 * u * k; x.shadowOffsetY = 7 * u * k;
@@ -289,6 +299,23 @@ export class MapView {
     const pat = x.createPattern(this.noise, 'repeat');
     if (pat) { pat.setTransform(new DOMMatrix().scale(1 / k)); x.fillStyle = pat; x.fillRect(0, 0, m.w, m.h); }
     x.restore();
+    // relieve: sombreado de las cordilleras y, en invierno, nieve en las cumbres
+    if (this.relief) {
+      x.save(); x.clip(this.land, 'evenodd');
+      x.globalCompositeOperation = 'overlay'; x.globalAlpha = this.theme === 'atlas' ? .5 : .62;
+      x.drawImage(this.relief, 0, 0, m.w, m.h);
+      x.globalCompositeOperation = 'source-over';
+      if (this.winter) {
+        if (!this.snowMask) {
+          const c = document.createElement('canvas'); c.width = this.relief.width; c.height = this.relief.height;
+          const cx = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
+          cx.drawImage(this.relief, 0, 0); cx.globalCompositeOperation = 'source-in'; cx.fillStyle = '#F4F8FF'; cx.fillRect(0, 0, c.width, c.height);
+          this.snowMask = c;
+        }
+        x.globalAlpha = .26; x.drawImage(this.snowMask, 0, 0, m.w, m.h);
+      }
+      x.restore();
+    }
     each(p => this.rimProvince(x, p, this.provColor(p), u));
     each(p => this.glowProvince(x, p, u));
     // líneas de frontera: finas entre provincias del mismo bando, marcadas entre bandos
@@ -304,6 +331,20 @@ export class MapView {
     x.setLineDash([]);
     // costa: línea clara y nítida
     x.strokeStyle = this.theme === 'atlas' ? 'rgba(60,40,15,.75)' : 'rgba(230,240,255,.55)'; x.lineWidth = 1.1 * u; x.stroke(this.land);
+    x.restore();
+  }
+  /** Líneas paralelas a la costa en el mar. @param {CanvasRenderingContext2D} x @param {number} k @param {number} u */
+  waterlines(x, k, u) {
+    const c = document.createElement('canvas'); c.width = x.canvas.width; c.height = x.canvas.height;
+    const l = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
+    l.setTransform(k, 0, 0, k, M * k, M * k); l.lineJoin = 'round';
+    for (const [i, d] of [[3, 23], [2, 16], [1, 10], [0, 5]]) { // de fuera adentro para no borrar las anteriores
+      l.globalAlpha = 1 - i * .2;
+      l.globalCompositeOperation = 'source-over'; l.strokeStyle = '#fff'; l.lineWidth = (d * 2 + 1.1) * u; l.stroke(this.land);
+      l.globalCompositeOperation = 'destination-out'; l.globalAlpha = 1; l.lineWidth = (d * 2 - 1.1) * u; l.stroke(this.land);
+    }
+    x.save(); x.setTransform(1, 0, 0, 1, 0, 0);
+    x.globalAlpha = this.theme === 'atlas' ? .3 : .13; x.drawImage(c, 0, 0);
     x.restore();
   }
   /** @param {number} p */

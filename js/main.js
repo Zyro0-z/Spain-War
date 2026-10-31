@@ -95,7 +95,10 @@ function drift() {
   };
   next();
 }
-function leaveMenu() { clearTimeout(driftT); hideMenu(); W.view.labels = S.settings.labels; }
+function leaveMenu() {
+  clearTimeout(driftT); hideMenu(); W.view.labels = S.settings.labels;
+  const su = $('#setup'); if (!su.hidden) { su.hidden = true; su.innerHTML = ''; }
+}
 function onlineHooks() { return {onExit:menu, onLook}; }
 function room() { leaveMenu(); resumeOnline(W, onlineHooks()).then(ok => { if (!ok) menu(); }); }
 
@@ -112,13 +115,18 @@ function start(seed, o = {}) {
 /* ---------- Conquista ---------- */
 function warSetup() {
   leaveMenu();
-  showWarSetup(W, {onBack:menu, onStart:(sc, me, diff) => startWar(sc, me, diff)});
+  showWarSetup(W, {onBack:menu, onStart:(sc, me, diff, rules) => startWar(sc, me, diff, '', rules)});
 }
-/** @param {string} sc @param {number} me @param {import('./conquest/engine.js').Difficulty} diff @param {string} [seed] */
-function startWar(sc, me, diff, seed) {
+/**
+ * @param {string} sc @param {number} me @param {import('./conquest/engine.js').Difficulty} diff @param {string} [seed]
+ * @param {{fog?:boolean, events?:boolean, seasons?:boolean, victory?:string}} [r]
+ */
+function startWar(sc, me, diff, seed, r = {}) {
   leaveMenu();
-  const spec = scenario(W.map, sc, W.colors);
-  const g = createGame(geo, spec, {seed:cleanSeed(seed || '') || newSeed(), humans:[me], rules:{difficulty:diff}});
+  const spec = scenario(W.map, sc, W.colors), nf = spec.factions.length;
+  const vt = /** @type {any} */ (r.victory || 'dominacion');
+  const victory = vt === 'capitales' ? {type:vt, n:Math.max(2, Math.ceil(nf / 2))} : vt === 'puntos' ? {type:vt, turns:60} : {type:vt};
+  const g = createGame(geo, spec, {seed:cleanSeed(seed || '') || newSeed(), humans:[me], rules:{difficulty:diff, fog:!!r.fog, events:r.events !== false, seasons:r.seasons !== false, victory}});
   const id = Date.now().toString(36);
   S.stats.games++;
   runWar(id, g, me, sc, diff);

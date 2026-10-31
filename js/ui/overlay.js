@@ -17,7 +17,10 @@ export class Overlay {
     svg.appendChild(el('defs')).innerHTML = `
       <linearGradient id="tkShine" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".35"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".25"/></linearGradient>
       <linearGradient id="tkGold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF1B8"/><stop offset=".5" stop-color="#F2C94C"/><stop offset="1" stop-color="#9A6A10"/></linearGradient>`;
+    this.gFront = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-front'})));
     this.gMap = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-map'})));
+    this.gSmoke = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-smoke'})));
+    /** @type {number[]} */ this.smokeAt = [];
     this.gArr = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-arr'})));
     this.gTok = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-tok'})));
     /** @type {Map<number, {g:SVGGElement, bg:SVGRectElement, txt:SVGTextElement, castle:SVGPathElement, extra:SVGTextElement}>} */
@@ -72,6 +75,25 @@ export class Overlay {
     if (h.sel != null && h.sel >= 0) { add(h.sel, 'hl-sel-glow'); add(h.sel, 'hl-sel'); }
     this.sync();
   }
+  /** Frentes de guerra: fronteras entre tú y tus enemigos, en rojo. @param {string[]} paths */
+  fronts(paths) {
+    this.gFront.innerHTML = '';
+    for (const d of paths) {
+      this.gFront.appendChild(el('path', {d, class:'front-glow', 'vector-effect':'non-scaling-stroke'}));
+      this.gFront.appendChild(el('path', {d, class:'front', 'vector-effect':'non-scaling-stroke'}));
+    }
+    this.sync();
+  }
+  /** Humo y brasas donde hubo batalla. @param {number[]} ps */
+  smoke(ps) {
+    this.smokeAt = ps.slice(0, 10); this.gSmoke.innerHTML = '';
+    for (const p of this.smokeAt) {
+      const g = el('g', {class:'smoke', 'data-p':p});
+      g.innerHTML = '<circle r="5"/><circle r="5"/><circle r="5"/><circle class="ember" r="1.8" cx="-4" cy="2"/><circle class="ember" r="1.4" cx="5" cy="1"/>';
+      this.gSmoke.appendChild(g);
+    }
+    this.sync();
+  }
   /** Punto de anclaje de la ficha de una provincia (pantalla). @param {number} p */
   anchor(p) { const l = this.map.provinces[p].label; return this.view.toScreen(l[0], l[1]); }
   /**
@@ -104,6 +126,8 @@ export class Overlay {
     const v = this.view, c = v.cam, f = v.free();
     const ox = f.x + f.w / 2 - c.x * c.s, oy = f.y + f.h / 2 - c.y * c.s;
     this.gMap.setAttribute('transform', `matrix(${c.s},0,0,${c.s},${ox},${oy})`);
+    this.gFront.setAttribute('transform', `matrix(${c.s},0,0,${c.s},${ox},${oy})`);
+    this.gSmoke.querySelectorAll('g').forEach(g => { const [x, y] = this.anchor(+(g.getAttribute('data-p') || 0)); g.setAttribute('transform', `translate(${(x + 16).toFixed(1)} ${(y - 6).toFixed(1)})`); });
     const k = Math.max(.8, Math.min(1.35, .55 + .45 * c.s / v.fitScale()));
     for (const [p, t] of this.tokens) {
       if (t.g.style.display === 'none') continue;
