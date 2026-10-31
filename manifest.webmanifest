@@ -1,0 +1,16 @@
+{
+  "name": "España en Guerra",
+  "short_name": "En Guerra",
+  "description": "Estrategia por turnos con las 47 provincias de la España peninsular.",
+  "lang": "es",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#071226",
+  "theme_color": "#071226",
+  "icons": [
+    {"src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}

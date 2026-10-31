@@ -1,0 +1,16 @@
+{
+  "name": "espana-en-guerra",
+  "private": true,
+  "type": "module",
+  "description": "Estrategia por turnos con las 47 provincias de la España peninsular. Sin dependencias en tiempo de ejecución ni compilación.",
+  "scripts": {
+    "test": "node --test",
+    "start": "python3 -m http.server 8080",
+    "build:map": "node scripts/build-map.mjs"
+  },
+  "devDependencies": {
+    "d3-geo": "^3.1.1",
+    "topojson-client": "^3.1.0",
+    "topojson-simplify": "^3.0.3"
+  }
+}

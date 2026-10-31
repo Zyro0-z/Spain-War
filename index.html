@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="En Guerra">
+<meta name="description" content="Estrategia por turnos con las 47 provincias de la España peninsular. Ruleta, dados y conquista hasta que solo quede una.">
+<meta name="theme-color" content="#071226">
+<title>España en Guerra</title>
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-512.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preload" href="fonts/barlow-condensed-700.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/barlow-condensed-800.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="data/map.json" as="fetch" crossorigin>
+<link rel="modulepreload" href="js/main.js">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<svg id="sprite" width="0" height="0" style="position:absolute" aria-hidden="true"></svg>
+
+<div class="app" id="app">
+  <div class="bg" aria-hidden="true"></div>
+  <canvas id="map" role="img" aria-label="Mapa de España por provincias"></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+
+  <section class="screen menu" id="menu" aria-label="Menú principal"></section>
+
+  <section class="screen play" id="play" aria-label="Partida" hidden>
+    <header class="hud" id="hud"></header>
+    <div class="banner" id="banner" role="status" aria-live="off"></div>
+    <div class="wheelbox" id="wheelbox" hidden></div>
+    <div class="dock" id="dock"></div>
+  </section>
+
+  <div class="overlay" id="victory" role="dialog" aria-modal="true" aria-labelledby="vTitle" hidden></div>
+  <div class="backdrop" id="backdrop" hidden></div>
+  <div class="sheet glass" id="sheet" role="dialog" aria-modal="true" hidden></div>
+  <div class="toast glass" id="toast" role="status"></div>
+  <div class="fps" id="fps" hidden></div>
+</div>
+
+<div class="sr" id="sr" aria-live="polite"></div>
+<canvas id="fx" aria-hidden="true"></canvas>
+<noscript><p style="padding:24px;font:17px system-ui;color:#fff">Esta app necesita JavaScript.</p></noscript>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

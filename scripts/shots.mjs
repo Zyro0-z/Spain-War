@@ -1,0 +1,145 @@
+// @ts-check
+// Capturas de pantalla en tamaño iPhone 14 (390×844 a 3x) de menú, partida, combate, conquista y victoria.
+// Uso: node scripts/shots.mjs [chromium|webkit] [carpeta]
+// - chromium: Playwright con Chromium.
+// - webkit: WebKitGTK por WebDriver (WebKitWebDriver), el mismo motor que Safari.
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import {spawn} from 'node:child_process';
+import {createRequire} from 'node:module';
+import {fileURLToPath} from 'node:url';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ENGINE = process.argv[2] || 'chromium';
+const OUT = path.resolve(process.argv[3] || path.join(ROOT, 'shots'));
+const ONLY = process.argv[4] ? process.argv[4].split(',') : null;
+const W = 390, H = 844, DPR = 3;
+const TYPES = {'.html':'text/html', '.js':'text/javascript', '.css':'text/css', '.json':'application/json', '.woff2':'font/woff2', '.png':'image/png', '.svg':'image/svg+xml', '.webmanifest':'application/manifest+json'};
+
+function serve() {
+  return new Promise(res => {
+    const srv = http.createServer((q, r) => {
+      const u = decodeURIComponent(new URL(q.url || '/', 'http://x').pathname);
+      let f = path.join(ROOT, u === '/' ? 'index.html' : u);
+      if (u === '/__host') { // marco de 390×844 para WebKit (su ventana mínima es más ancha)
+        r.writeHead(200, {'content-type':'text/html'});
+        r.end(`<!doctype html><body style="margin:0;background:#000"><iframe id="f" src="/?hq&${new URL(q.url || '/', 'http://x').search.slice(1)}" style="border:0;width:${W}px;height:${H}px;display:block;margin:120px 0 0 0"></iframe></body>`);
+        return;
+      }
+      if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { r.writeHead(404); r.end(); return; }
+      r.writeHead(200, {'content-type':TYPES[path.extname(f)] || 'application/octet-stream'}); fs.createReadStream(f).pipe(r);
+    });
+    srv.listen(0, '127.0.0.1', () => res(srv));
+  });
+}
+
+/* ---------- Guion común (se ejecuta en la página) ---------- */
+// Cada escena deja la app en un estado y congela el reloj de la partida.
+const SCENES = {
+  // Rendimiento: 15 s de partida a x1 midiendo el tiempo entre fotogramas (no hace captura útil)
+  perf:`async () => { __eeg.start('PROVINCIA', {skip:60}); const d = []; let last = 0, run = true;
+    const f = t => { if (last) d.push(t - last); last = t; if (run) requestAnimationFrame(f); }; requestAnimationFrame(f);
+    await sleep(15000); run = false; const s = [...d].sort((a, b) => a - b), avg = d.reduce((a, b) => a + b, 0) / d.length;
+    window.__perf = {frames:d.length, fps:+(1000 / avg).toFixed(1), avg:+avg.toFixed(1), p95:+s[Math.floor(s.length * .95)].toFixed(1), worst:+s[s.length - 1].toFixed(1), dpr:__eeg.W.view.dpr}; }`,
+  menu:`async () => { await sleep(1400); }`,
+  ajustes:`async () => { document.querySelector('#mSet').click(); await sleep(700); }`,
+  ruleta:`async () => { await freezeAt('spin', 1500, 0, 2); }`,
+  objetivo:`async () => { await freezeAt('target', 1350, 0, 2); }`,
+  combate:`async () => { await freezeAt('roll', 520, 0, 1); }`,
+  conquista:`async () => { await freezeAt('conquest', 260, 12, 1, 120000); }`,
+  atlas:`async () => { __eeg.look({theme:'atlas'}); await freezeAt('roll', 900, 0, 2); }`,
+  contraste:`async () => { __eeg.look({contrast:true, textSize:1.15}); await freezeAt('target', 1350, 0, 2); }`,
+  victoria:`async () => { __eeg.start('PROVINCIA', {skip:520}); __eeg.match.clock.speed = 5;
+    await waitFor(() => document.body.dataset.phase === 'victory', 180000); await sleep(2600); }`,
+};
+// Congela la partida en una fase exacta: pausa el reloj en el acto, avanza X ms de partida y N fotogramas de partículas.
+const HELPERS = `window.sleep = ms => new Promise(r => setTimeout(r, ms));
+window.waitFor = (f, t = 30000) => new Promise((res, rej) => { const t0 = Date.now(); const k = () => { try { if (f()) return res(true); } catch (e) {} if (Date.now() - t0 > t) return rej(new Error('timeout')); setTimeout(k, 50); }; k(); });
+window.freezeAt = async (phase, ms, fxFrames, speed, t = 60000) => {
+  let hit = false;
+  __eeg.onPhase = (name, m) => { if (name === phase && !hit) { hit = true; m.clock.pause(); __eeg.freezeFx(true); } };
+  __eeg.start('PROVINCIA', {skip:60}); __eeg.match.clock.speed = speed;
+  await waitFor(() => hit, t);
+  const m = __eeg.match; m.clock.speed = 1;
+  m.clock.advance(ms); __eeg.stepFx(fxFrames); m.view.invalidate();
+  await sleep(500);
+};`;
+
+async function withChromium(base) {
+  const require = createRequire(import.meta.url);
+  const {chromium} = require('playwright');
+  const b = await chromium.launch();
+  for (const [name, fn] of Object.entries(SCENES)) {
+    if (ONLY ? !ONLY.includes(name) : name === 'perf') continue;
+    const ctx = await b.newContext({viewport:{width:W, height:H}, deviceScaleFactor:DPR, isMobile:true, hasTouch:true, reducedMotion:'no-preference'});
+    const pg = await ctx.newPage();
+    const errs = [];
+    pg.on('pageerror', e => errs.push(String(e)));
+    pg.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
+    await pg.goto(base + '/?hq&' + name);
+    await pg.waitForFunction(() => /** @type {any} */ (window).__eeg && document.querySelector('#menu .mode'));
+    await pg.evaluate(HELPERS);
+    await pg.evaluate(`(${fn})()`);
+    if (name === 'perf') { console.log('perf', JSON.stringify(await pg.evaluate('window.__perf'))); await ctx.close(); continue; }
+    await pg.screenshot({path:path.join(OUT, `${name}.png`)});
+    console.log(name, errs.length ? 'ERRORES: ' + errs.join(' | ') : 'ok');
+    await ctx.close();
+  }
+  await b.close();
+}
+
+/* ---------- WebKit por WebDriver ---------- */
+/** Recorta el marco de la captura completa (escala real = alto de la imagen / alto de la ventana). */
+function crop(src, dst, [x, y, w, h, , vh]) {
+  const py = `from PIL import Image\nim=Image.open(${JSON.stringify(src)}); k=im.size[1]/${vh}\nim.crop((round(${x}*k),round(${y}*k),round(${x + w}*k),round(${y + h}*k))).resize((${W * DPR},${H * DPR})).save(${JSON.stringify(dst)})`;
+  return new Promise((res, rej) => { const p = spawn('python3', ['-I', '-c', py], {stdio:'inherit'}); p.on('exit', c => c ? rej(new Error('crop')) : res(undefined)); });
+}
+async function wd(port, method, p, body) {
+  const r = await fetch(`http://127.0.0.1:${port}${p}`, {method, headers:{'content-type':'application/json'}, body:body ? JSON.stringify(body) : undefined});
+  const j = await r.json();
+  if (j.value && j.value.error) throw new Error(j.value.error + ': ' + j.value.message);
+  return j.value;
+}
+async function withWebKit(base) {
+  const port = 4444 + Math.floor(Math.random() * 1000);
+  const xvfb = spawn('Xvfb', [':77', '-screen', '0', '1800x4000x24'], {stdio:'ignore'});
+  await new Promise(r => setTimeout(r, 800));
+  const drv = spawn('WebKitWebDriver', [`--port=${port}`], {stdio:'ignore', env:{...process.env, DISPLAY:':77', GDK_SCALE:String(DPR), WEBKIT_DISABLE_COMPOSITING_MODE:'0'}});
+  await new Promise(r => setTimeout(r, 1200));
+  try {
+    for (const [name, fn] of Object.entries(SCENES)) {
+      if (ONLY ? !ONLY.includes(name) : name === 'perf') continue;
+      const s = await wd(port, 'POST', '/session', {capabilities:{alwaysMatch:{browserName:'MiniBrowser', 'webkitgtk:browserOptions':{binary:'/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/MiniBrowser', args:['--automation', '--enable-write-console-messages-to-stdout=true']}}}});
+      const id = s.sessionId;
+      await wd(port, 'POST', `/session/${id}/window/rect`, {width:W + 120, height:H + 300, x:0, y:0});
+      await wd(port, 'POST', `/session/${id}/url`, {url:base + '/__host?' + name});
+      const fr = await wd(port, 'POST', `/session/${id}/element`, {using:'css selector', value:'#f'});
+      const ref = Object.values(fr)[0];
+      await new Promise(r => setTimeout(r, 600));
+      await wd(port, 'POST', `/session/${id}/frame`, {id:fr});
+      await wd(port, 'POST', `/session/${id}/execute/async`, {script:`const done = arguments[arguments.length - 1]; (async () => { const t0 = Date.now(); while (!(window.__eeg && document.querySelector('#menu .mode'))) { if (Date.now() - t0 > 20000) break; await new Promise(r => setTimeout(r, 100)); } ${HELPERS} try { await (${fn})(); done('ok'); } catch (e) { done('ERR ' + e); } })();`, args:[]});
+      const vp = await wd(port, 'POST', `/session/${id}/execute/sync`, {script:'return [innerWidth, innerHeight, devicePixelRatio]', args:[]});
+      if (name === 'perf') { console.log('perf webkit', JSON.stringify(await wd(port, 'POST', `/session/${id}/execute/sync`, {script:'return window.__perf', args:[]}))); await wd(port, 'DELETE', `/session/${id}`); continue; }
+      await wd(port, 'POST', `/session/${id}/frame/parent`, {});
+      // Captura completa y recorte del marco con Python (la captura de elemento de WebKitGTK sale desplazada)
+      const rect = await wd(port, 'POST', `/session/${id}/execute/sync`, {script:'const r = document.getElementById("f").getBoundingClientRect(); return [r.left, r.top, r.width, r.height, devicePixelRatio, innerHeight]', args:[]});
+      const png = await wd(port, 'GET', `/session/${id}/screenshot`);
+      const full = path.join(OUT, `${name}.full.png`);
+      fs.writeFileSync(full, Buffer.from(png, 'base64'));
+      await crop(full, path.join(OUT, `${name}.png`), rect);
+      if (!process.env.KEEP_FULL) fs.unlinkSync(full);
+      void ref;
+      console.log(name, 'webkit', vp.join('×'));
+      await wd(port, 'DELETE', `/session/${id}`);
+    }
+  } finally { drv.kill(); xvfb.kill(); }
+}
+
+const srv = /** @type {http.Server} */ (await serve());
+const addr = /** @type {import('node:net').AddressInfo} */ (srv.address());
+fs.mkdirSync(OUT, {recursive:true});
+try {
+  if (ENGINE === 'webkit') await withWebKit(`http://127.0.0.1:${addr.port}`);
+  else await withChromium(`http://127.0.0.1:${addr.port}`);
+} finally { srv.close(); }
