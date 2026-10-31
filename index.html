@@ -20,7 +20,6 @@
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-<svg id="sprite" width="0" height="0" style="position:absolute" aria-hidden="true"></svg>
 
 <div class="app" id="app">
   <div class="bg" aria-hidden="true"></div>
@@ -28,6 +27,9 @@
   <div class="vignette" aria-hidden="true"></div>
 
   <section class="screen menu" id="menu" aria-label="Menú principal"></section>
+
+  <section class="screen setup" id="setup" aria-label="Un jugador: elige tu provincia" hidden></section>
+  <section class="screen lobby" id="lobby" aria-label="Sala multijugador" hidden></section>
 
   <section class="screen play" id="play" aria-label="Partida" hidden>
     <header class="hud" id="hud"></header>

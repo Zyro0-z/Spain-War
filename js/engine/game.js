@@ -107,11 +107,35 @@ function battle(rng, pa, pd) {
  * @returns {{game:Game, round:Round}}
  */
 export function attack(graph, g, attacker, target, alive = aliveFactions(g)) {
-  const targets = targetsOf(graph, g, attacker);
-  if (!g.alive[attacker] || !targets.includes(target)) throw new Error('Objetivo no válido');
+  check(graph, g, attacker, target);
+  const game = clone(g), defender = game.owner[target];
+  const {rolls} = battle(game.rng, game.power[attacker], game.power[defender]);
+  return resolve(graph, game, attacker, target, rolls, alive);
+}
+
+/** @param {Graph} graph @param {Game} g @param {number} attacker @param {number} target */
+function check(graph, g, attacker, target) {
+  if (g.winner >= 0 || !g.alive[attacker] || !targetsOf(graph, g, attacker).includes(target)) throw new Error('Objetivo no válido');
+}
+
+/**
+ * Aplica un combate con tiradas ya hechas (las del anfitrión en el multijugador).
+ * Comprueba el objetivo y que las tiradas repetidas fueran empates. No usa el generador.
+ * @param {Graph} graph @param {Game} g @param {number} attacker @param {number} target @param {Roll[]} rolls @param {number[]} [alive]
+ * @returns {{game:Game, round:Round}}
+ */
+export function resolve(graph, g, attacker, target, rolls, alive = aliveFactions(g)) {
+  check(graph, g, attacker, target);
   const game = clone(g), defender = game.owner[target], from = sourcesOf(graph, game, attacker, target);
+  const targets = targetsOf(graph, game, attacker);
   const pa = game.power[attacker], pd = game.power[defender];
-  const {rolls, won} = battle(game.rng, pa, pd);
+  const ok = (/** @type {number[]} */ v) => Array.isArray(v) && v.length === 3 && v.every(x => Number.isInteger(x) && x >= 1 && x <= 6);
+  if (!rolls.length || !rolls.every(r => ok(r.a) && ok(r.d))) throw new Error('Tiradas no válidas');
+  const sc = (/** @type {Roll} */ r) => [(r.a[0] + r.a[1] + r.a[2]) * pa, (r.d[0] + r.d[1] + r.d[2]) * pd];
+  rolls.slice(0, -1).forEach(r => { const [x, y] = sc(r); if (x !== y) throw new Error('Tiradas no válidas'); });
+  const [x, y] = sc(rolls[rolls.length - 1]);
+  if (x === y) throw new Error('Tiradas no válidas');
+  const won = x > y;
   const [w, l] = won ? [attacker, defender] : [defender, attacker];
   game.power[w] += GAIN;
   game.power[l] = Math.max(MIN_POWER, game.power[l] - LOSS);
@@ -127,8 +151,32 @@ export function attack(graph, g, attacker, target, alive = aliveFactions(g)) {
   game.round++;
   const left = aliveFactions(game);
   if (left.length === 1) game.winner = left[0];
-  return {game, round:{n:game.round, alive, attacker, targets, target, defender, from, pa, pd, prob:winProb(pa, pd).p, rolls, won,
+  return {game, round:{n:game.round, alive, attacker, targets, target, defender, from, pa, pd, prob:winProb(pa, pd).p, rolls:rolls.map(r => ({a:[...r.a], d:[...r.d]})), won,
     paAfter:game.power[attacker], pdAfter:game.power[defender], eliminated, winner:game.winner}};
+}
+
+/* ---------- Formato compacto para la red ---------- */
+/** Tiradas como texto: "345612.112334" (3 dados del atacante y 3 del defensor por tirada). @param {Roll[]} rolls */
+export const packRolls = rolls => rolls.map(r => r.a.join('') + r.d.join('')).join('.');
+/** @param {string} s @returns {Roll[]} */
+export function unpackRolls(s) {
+  return String(s).split('.').filter(Boolean).map(t => {
+    if (!/^[1-6]{6}$/.test(t)) throw new Error('Tiradas no válidas');
+    const v = [...t].map(Number); return {a:v.slice(0, 3), d:v.slice(3)};
+  });
+}
+/** Estado mínimo para reconectar: dueños, poder y estadísticas. @param {Game} g */
+export const packGame = g => ({seed:g.seed, n:g.round, o:g.owner, p:g.power, c:g.stats.conq, w:g.stats.wins, k:g.stats.peak});
+/** @param {Graph} graph @param {ReturnType<typeof packGame>} s @returns {Game} */
+export function unpackGame(graph, s) {
+  const g = newGame(graph, s.seed);
+  const n = graph.n, arr = (/** @type {unknown} */ v) => Array.isArray(v) && v.length === n && v.every(x => Number.isInteger(x) && x >= 0);
+  if (!arr(s.o) || !arr(s.p) || !s.o.every(o => o < n)) throw new Error('Estado no válido');
+  g.round = +s.n || 0; g.owner = [...s.o]; g.power = s.p.map(x => Math.max(MIN_POWER, x));
+  if (arr(s.c)) g.stats.conq = [...s.c]; if (arr(s.w)) g.stats.wins = [...s.w]; if (arr(s.k)) g.stats.peak = [...s.k];
+  const c = counts(g); g.alive = c.map(x => x > 0);
+  const left = aliveFactions(g); g.winner = left.length === 1 ? left[0] : -1;
+  return g;
 }
 
 /**

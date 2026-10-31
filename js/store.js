@@ -16,10 +16,20 @@ export const VERSION = 1;
  * @property {boolean} fps contador de fotogramas (para medir)
  */
 /**
- * @typedef {object} Saved partida en curso
- * @property {'normal'} mode
+ * @typedef {object} Saved partida en curso (normal o un jugador)
+ * @property {'normal'|'solo'} mode
  * @property {import('./engine/game.js').Game} game
  * @property {number} at
+ * @property {number} [me] mi bando (un jugador)
+ * @property {string} [level] nivel de los bots
+ */
+/**
+ * @typedef {object} Online sala multijugador en curso (para volver a entrar)
+ * @property {'host'|'guest'} kind
+ * @property {string} code
+ * @property {number} at
+ * @property {any} data estado del anfitrión o del invitado
+ * @property {import('./engine/game.js').Game|null} [view] partida tal como se veía
  */
 /**
  * @typedef {object} State
@@ -28,6 +38,9 @@ export const VERSION = 1;
  * @property {{games:number, finished:number, rounds:number}} stats
  * @property {Saved|null} current
  * @property {{seed:string, winner:number, rounds:number, at:number}[]} history
+ * @property {{id:string, name:string}} profile
+ * @property {Online|null} online
+ * @property {{me:number, level:string}} solo últimas elecciones del modo un jugador
  */
 
 /** @returns {State} */
@@ -38,6 +51,9 @@ export function fresh() {
     stats:{games:0, finished:0, rounds:0},
     current:null,
     history:[],
+    profile:{id:Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 8), name:''},
+    online:null,
+    solo:{me:-1, level:'estratega'},
   };
 }
 
@@ -51,11 +67,16 @@ export function migrate(s) {
   if (!['full', 'reduced'].includes(st.motion)) st.motion = 'full';
   if (st.textSize !== 'auto' && !(+st.textSize >= .8 && +st.textSize <= 1.6)) st.textSize = 'auto';
   const cur = s.current && s.current.game && Array.isArray(s.current.game.owner) ? s.current : null;
+  if (cur && cur.mode !== 'solo') cur.mode = 'normal';
+  const on = s.online && s.online.code && s.online.data && Date.now() - (+s.online.at || 0) < 12 * 3600e3 ? s.online : null;
   return {
     v:VERSION, settings:st,
     stats:{...f.stats, ...(s.stats || {})},
     current:cur,
     history:Array.isArray(s.history) ? s.history.slice(0, 30) : [],
+    profile:{...f.profile, ...(s.profile && typeof s.profile.id === 'string' ? s.profile : {})},
+    online:on,
+    solo:{...f.solo, ...(s.solo || {})},
   };
 }
 

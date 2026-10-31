@@ -14,6 +14,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ENGINE = process.argv[2] || 'chromium';
 const OUT = path.resolve(process.argv[3] || path.join(ROOT, 'shots'));
 const ONLY = process.argv[4] ? process.argv[4].split(',') : null;
+/** Escenas que usan la sala local del navegador (sin ntfy). */
+const query = (/** @type {string} */ name) => (name === 'sala' || name === 'online' ? 'hq&red=local&' : 'hq&') + name;
 const W = 390, H = 844, DPR = 3;
 const TYPES = {'.html':'text/html', '.js':'text/javascript', '.css':'text/css', '.json':'application/json', '.woff2':'font/woff2', '.png':'image/png', '.svg':'image/svg+xml', '.webmanifest':'application/manifest+json'};
 
@@ -24,7 +26,7 @@ function serve() {
       let f = path.join(ROOT, u === '/' ? 'index.html' : u);
       if (u === '/__host') { // marco de 390×844 para WebKit (su ventana mínima es más ancha)
         r.writeHead(200, {'content-type':'text/html'});
-        r.end(`<!doctype html><body style="margin:0;background:#000"><iframe id="f" src="/?hq&${new URL(q.url || '/', 'http://x').search.slice(1)}" style="border:0;width:${W}px;height:${H}px;display:block;margin:120px 0 0 0"></iframe></body>`);
+        r.end(`<!doctype html><body style="margin:0;background:#000"><iframe id="f" src="/?${query(new URL(q.url || '/', 'http://x').search.slice(1))}" style="border:0;width:${W}px;height:${H}px;display:block;margin:120px 0 0 0"></iframe></body>`);
         return;
       }
       if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { r.writeHead(404); r.end(); return; }
@@ -50,6 +52,38 @@ const SCENES = {
   conquista:`async () => { await freezeAt('conquest', 260, 12, 1, 120000); }`,
   atlas:`async () => { __eeg.look({theme:'atlas'}); await freezeAt('roll', 900, 0, 2); }`,
   contraste:`async () => { __eeg.look({contrast:true, textSize:1.15}); await freezeAt('target', 1350, 0, 2); }`,
+  'un-jugador':`async () => { document.querySelector('#mSolo').click(); await sleep(500);
+    const sel = document.querySelector('#suSel'); sel.value = String(__eeg.W.map.provinces.find(p => p.name === 'Burgos').i); sel.dispatchEvent(new Event('change'));
+    document.querySelector('[data-lv="mariscal"]').click(); await sleep(900); }`,
+  'tu-turno':`async () => { let hit = false;
+    __eeg.onPhase = (name, m) => { if (name === 'choose' && !hit) { hit = true; m.clock.pause(); } };
+    __eeg.solo(22, 'estratega', 'CASTILLA', {skip:40}); __eeg.match.clock.speed = 2;
+    await waitFor(() => hit, 90000); __eeg.match.clock.advance(3200); __eeg.match.view.invalidate(); await sleep(600); }`,
+  sala:`async () => {
+    document.querySelector('#mOnline').click(); await sleep(400);
+    document.querySelector('#onName').value = 'Ana'; document.querySelector('#onNew').click();
+    await waitFor(() => document.querySelector('.code-box b'));
+    const code = document.querySelector('.code-box b').textContent;
+    const {Guest} = await import('./js/net/room.js'); const {LocalTransport, topicOf} = await import('./js/net/transport.js');
+    const P = n => __eeg.W.map.provinces.find(p => p.name === n).i;
+    const sel = document.querySelector('#lbSel'); sel.value = String(P('Madrid')); sel.dispatchEvent(new Event('change'));
+    for (const [id, name, prov] of [['g1', 'Luis', 'Sevilla'], ['g2', 'Marta', 'Valencia'], ['g3', 'Iker', 'Bizkaia']]) {
+      const g = new Guest({transport:new LocalTransport(topicOf(code)), graph:__eeg.W.graph, id, name, code}); await g.join(); await sleep(300); await g.pick(P(prov)); }
+    await sleep(2500); }`,
+  online:`async () => {
+    const {Host} = await import('./js/net/room.js'); const {LocalTransport, topicOf} = await import('./js/net/transport.js');
+    const P = n => __eeg.W.map.provinces.find(p => p.name === n).i, code = 'K7QX2M';
+    const host = new Host({transport:new LocalTransport(topicOf(code)), graph:__eeg.W.graph, id:'host1', name:'Ana', code, sp:2});
+    await host.open(); host.pick(P('Madrid'));
+    document.querySelector('#mOnline').click(); await sleep(400);
+    document.querySelector('#onName').value = 'Luis'; document.querySelector('#onCode').value = code; document.querySelector('#onJoin').click();
+    await waitFor(() => document.querySelector('#lbSel')); await sleep(800);
+    const sel = document.querySelector('#lbSel'); sel.value = String(P('Sevilla')); sel.dispatchEvent(new Event('change'));
+    await waitFor(() => host.canStart(), 15000);
+    let hit = false;
+    __eeg.onPhase = (name, m) => { if (name === 'choose' && !hit) { hit = true; m.clock.pause(); } };
+    await host.start('SALA0'); await host.advance();
+    await waitFor(() => hit, 90000); __eeg.match.clock.advance(2500); __eeg.match.view.invalidate(); await sleep(600); }`,
   victoria:`async () => { __eeg.start('PROVINCIA', {skip:520}); __eeg.match.clock.speed = 5;
     await waitFor(() => document.body.dataset.phase === 'victory', 180000); await sleep(2600); }`,
 };
@@ -77,7 +111,7 @@ async function withChromium(base) {
     const errs = [];
     pg.on('pageerror', e => errs.push(String(e)));
     pg.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
-    await pg.goto(base + '/?hq&' + name);
+    await pg.goto(base + '/?' + query(name));
     await pg.waitForFunction(() => /** @type {any} */ (window).__eeg && document.querySelector('#menu .mode'));
     await pg.evaluate(HELPERS);
     await pg.evaluate(`(${fn})()`);

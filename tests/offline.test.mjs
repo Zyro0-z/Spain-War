@@ -19,6 +19,12 @@ test('todos los módulos y fuentes están en la caché', () => {
   for (const f of [...walk('js'), ...walk('fonts').filter(f => f.endsWith('.woff2')), 'css/app.css', 'data/map.json']) assert.ok(core.includes(f), `falta en sw.js: ${f}`);
 });
 
+test('las banderas descargadas también se guardan', () => {
+  assert.match(sw, /data\/flags\.json/);
+  const flags = JSON.parse(fs.readFileSync(path.join(root, 'data/flags.json'), 'utf8'));
+  for (const ine of Object.keys(flags)) assert.ok(fs.existsSync(path.join(root, `data/flags/${ine}.png`)), ine);
+});
+
 test('el multijugador no se sirve desde caché (solo este origen)', () => {
   assert.match(sw, /url\.origin !== location\.origin/);
 });

@@ -5,12 +5,12 @@ import {swords, diceArt, marshalArt, onlineArt} from '../art.js';
 import {icon} from '../icons.js';
 import {sound} from '../fx.js';
 import {cleanSeed, newSeed} from '../engine/rng.js';
-import {$, esc, openSheet, closeSheet, toast} from './dom.js';
+import {$, esc, openSheet, closeSheet} from './dom.js';
 import {settingsSheet} from './settings.js';
 
 /**
  * @param {{colors:string[], map:{provinces:{name:string}[]}}} world
- * @param {{onNormal:(seed?:string)=>void, onResume:()=>void, onLook:()=>void}} hooks
+ * @param {{onNormal:(seed?:string)=>void, onResume:()=>void, onLook:()=>void, onSolo:()=>void, onOnline:()=>void, onRoom:()=>void}} hooks
  */
 export function renderMenu(world, hooks) {
   const m = $('#menu'), cur = S.current;
@@ -22,21 +22,22 @@ export function renderMenu(world, hooks) {
       <h1 class="logo">España<small>en guerra</small></h1>
       <p class="tagline">47 provincias. Una ruleta, tres dados y solo un bando en pie.</p>
     </div>
-    ${cur ? `<button class="btn" id="mResume">${icon('play')}Continuar · ronda ${cur.game.round}</button>` : ''}
+    ${S.online ? `<button class="btn" id="mRoom">${icon('users')}Volver a la sala ${S.online.code}</button>` : ''}
+    ${cur ? `<button class="btn${S.online ? ' ghost' : ''}" id="mResume">${icon('play')}Continuar ${cur.mode === 'solo' ? 'como ' + world.map.provinces[cur.me ?? 0].name : 'partida'} · ronda ${cur.game.round}</button>` : ''}
     <button class="mode glass" id="mNormal" style="--mc:rgba(242,201,76,.18)">
       <span class="art">${diceArt()}</span>
       <span><h3>Normal</h3><p>Simulación automática. Mira cómo luchan las 47 provincias hasta que solo quede una.</p></span>
       <span class="go">${icon('play')}</span>
     </button>
-    <button class="mode glass locked" id="mSolo" style="--mc:rgba(88,166,255,.18)" aria-disabled="true">
+    <button class="mode glass" id="mSolo" style="--mc:rgba(88,166,255,.18)">
       <span class="art">${marshalArt()}</span>
-      <span><h3>Un jugador</h3><p>Elige tu provincia y conquista España contra los bots.</p><span class="pill">${icon('lock')}Muy pronto</span></span>
-      <span class="go">${icon('lock')}</span>
+      <span><h3>Un jugador</h3><p>Elige tu provincia y conquista España contra los bots.</p><span class="pill">Recluta · Estratega · Mariscal</span></span>
+      <span class="go">${icon('play')}</span>
     </button>
-    <button class="mode glass locked" id="mOnline" style="--mc:rgba(127,216,232,.16)" aria-disabled="true">
+    <button class="mode glass" id="mOnline" style="--mc:rgba(127,216,232,.16)">
       <span class="art">${onlineArt([world.colors[0], world.colors[27], world.colors[40]])}</span>
-      <span><h3>Multijugador</h3><p>De 2 a 8 móviles en la misma partida.</p><span class="pill">${icon('wifi')}Necesita internet · Muy pronto</span></span>
-      <span class="go">${icon('lock')}</span>
+      <span><h3>Multijugador</h3><p>De 2 a 8 móviles en la misma partida, con código o QR.</p><span class="pill">${icon('wifi')}Necesita internet</span></span>
+      <span class="go">${icon('play')}</span>
     </button>
     <div class="row2">
       <button class="btn ghost sm" id="mSeed">${icon('seed')}Semilla</button>
@@ -46,8 +47,9 @@ export function renderMenu(world, hooks) {
   </div>`;
   $('#mNormal').onclick = () => { sound('tap'); hooks.onNormal(); };
   const r = $('#mResume'); if (r) r.onclick = () => { sound('tap'); hooks.onResume(); };
-  $('#mSolo').onclick = () => { sound('tap'); toast('El modo un jugador llega en la siguiente fase'); };
-  $('#mOnline').onclick = () => { sound('tap'); toast('El multijugador llega en la última fase'); };
+  $('#mSolo').onclick = () => { sound('tap'); hooks.onSolo(); };
+  $('#mOnline').onclick = () => { sound('tap'); hooks.onOnline(); };
+  const rm = $('#mRoom'); if (rm) rm.onclick = () => { sound('tap'); hooks.onRoom(); };
   $('#mSet').onclick = () => { sound('tap'); settingsSheet(hooks.onLook); };
   $('#mSeed').onclick = () => {
     sound('tap');

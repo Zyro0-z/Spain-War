@@ -110,90 +110,7 @@ export function assignColors(adj) {
   return col.map(i => pal[i]);
 }
 
-/* ---------- Escudos heráldicos ---------- */
-const SHIELD = 'M6 15H58V47C58 63.5 46.5 75 32 78 17.5 75 6 63.5 6 47Z';
-const FIELD = 'M10 19H54V47C54 61 44.3 70.6 32 73.6 19.7 70.6 10 61 10 47Z';
 const GOLD = ['#FFF1B8', '#F2C94C', '#C8901E', '#7A4E0B'];
-const SILVER = ['#FFFFFF', '#E3E8EF', '#A9B4C2', '#5F6B7A'];
-/** Divisiones heráldicas posibles para el campo (en coordenadas del escudo). */
-const DIVISIONS = [
-  'plain',
-  'pale',      // partido
-  'fess',      // cortado
-  'quarterly', // cuartelado
-  'bend',      // banda
-  'chief',     // jefe
-  'chevron',   // cabrio
-  'saltire',   // aspa (de San Andrés)
-  'bordure',   // bordura componada
-];
-/**
- * Escudo procedural con monograma: campo del color del bando, división heráldica, bordura de oro, corona y letras.
- * Devuelve el <symbol> y sus degradados para el sprite global (así no se repiten ids en la página).
- * @param {{color:string, plate:string, idx:number}} o
- * @returns {{defs:string, symbol:string}}
- */
-export function shieldSymbol(o) {
-  const id = 'sh' + o.idx, c = o.color;
-  const metal = o.idx % 4 === 1 ? SILVER : GOLD;
-  const div = DIVISIONS[(o.idx * 7 + 3) % DIVISIONS.length];
-  const c1 = lighten(c, .2), c2 = darken(c, .3), alt = darken(c, .45);
-  const M = `url(#${id}m)`, A = `url(#${id}a)`;
-  let parts = '';
-  switch (div) {
-    case 'pale': parts = `<path d="M32 19H54V47C54 61 44.3 70.6 32 73.6Z" fill="${A}"/>`; break;
-    case 'fess': parts = `<path d="M10 44H54V47C54 61 44.3 70.6 32 73.6 19.7 70.6 10 61 10 47Z" fill="${A}"/>`; break;
-    case 'quarterly': parts = `<path d="M32 19H54V44H32Z" fill="${M}" opacity=".92"/><path d="M10 44H32V73.6C19.7 70.6 10 61 10 47Z" fill="${M}" opacity=".92"/>`; break;
-    case 'bend': parts = `<path d="M10 22.5 13.5 19 54 59.5 51 66Z" fill="${M}"/>`; break;
-    case 'chief': parts = `<path d="M10 19H54V31H10Z" fill="${M}"/>${[18, 46].map(x => `<circle cx="${x}" cy="25" r="2.6" fill="${alt}"/><circle cx="${x - .7}" cy="24.3" r=".9" fill="#fff" opacity=".35"/>`).join('')}`; break;
-    case 'chevron': parts = `<path d="M10 62 32 40 54 62V69L32 47 10 69Z" fill="${M}"/>`; break;
-    case 'saltire': parts = `<path d="M10 22 14 19 32 38 50 19 54 22 36 42 53 62 49.5 66.5 32 46 14.5 66.5 11 62 28 42Z" fill="${M}"/>`; break;
-    case 'bordure': parts = `<path d="${FIELD}" fill="none" stroke="${M}" stroke-width="8" stroke-dasharray="6.4 6.4"/>`; break;
-  }
-  const big = o.plate.length > 1, fs = big ? 16 : 18, ty = big ? 52.6 : 53.2;
-  const txt = (/** @type {string} */ fill, extra = '') => `<text x="32" y="${ty}" text-anchor="middle" font-family="'Barlow Condensed','Arial Narrow',sans-serif" font-weight="800" font-size="${fs}" letter-spacing="-.3" fill="${fill}"${extra}>${o.plate}</text>`;
-  const defs = `
-    <linearGradient id="${id}f" x1="0" y1="0" x2=".7" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset=".55" stop-color="${c}"/><stop offset="1" stop-color="${c2}"/></linearGradient>
-    <linearGradient id="${id}a" x1="0" y1="0" x2=".7" y2="1"><stop offset="0" stop-color="${darken(c, .16)}"/><stop offset="1" stop-color="${darken(c, .5)}"/></linearGradient>
-    <linearGradient id="${id}m" x1="0" y1="0" x2=".5" y2="1"><stop offset="0" stop-color="${metal[0]}"/><stop offset=".35" stop-color="${metal[1]}"/><stop offset=".75" stop-color="${metal[2]}"/><stop offset="1" stop-color="${metal[3]}"/></linearGradient>`;
-  const symbol = `<symbol id="shf${o.idx}" viewBox="0 0 64 82">
-  <path d="${SHIELD}" transform="translate(0 2.4)" fill="#000" opacity=".38"/>
-  <path d="${SHIELD}" fill="url(#shB)"/>
-  <path d="${SHIELD}" fill="none" stroke="#3D2604" stroke-opacity=".75" stroke-width=".8"/>
-  <g clip-path="url(#shC)">
-    <path d="${FIELD}" fill="url(#${id}f)"/>
-    ${parts}
-    <path d="${FIELD}" fill="url(#shH)"/>
-    <ellipse cx="32" cy="47" rx="${big ? 13 : 11}" ry="12.4" fill="${alt}" opacity=".6"/>
-    <ellipse cx="32" cy="47" rx="${big ? 13 : 11}" ry="12.4" fill="none" stroke="${M}" stroke-width="1.6"/>
-    ${txt('#000', ' opacity=".5" transform="translate(.5 .9)"')}${txt(M)}
-    <path d="${FIELD}" fill="url(#shS)"/>
-    <path d="${FIELD}" fill="none" stroke="#000" stroke-opacity=".45" stroke-width="2.2"/>
-  </g>
-  <path d="M8.2 17.2H55.8" stroke="#fff" stroke-opacity=".7" stroke-width=".8" stroke-linecap="round"/>
-  <use href="#shCrown"/>
-</symbol>`;
-  return {defs, symbol};
-}
-/** Degradados y piezas comunes de todos los escudos (van una sola vez en el sprite). */
-export function shieldCommon() {
-  return `
-    <linearGradient id="shG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${GOLD[0]}"/><stop offset=".4" stop-color="${GOLD[1]}"/><stop offset="1" stop-color="${GOLD[2]}"/></linearGradient>
-    <linearGradient id="shB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${GOLD[0]}"/><stop offset=".3" stop-color="${GOLD[1]}"/><stop offset=".62" stop-color="${GOLD[2]}"/><stop offset=".8" stop-color="${GOLD[1]}"/><stop offset="1" stop-color="${GOLD[3]}"/></linearGradient>
-    <linearGradient id="shS" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".42"/><stop offset=".42" stop-color="#fff" stop-opacity=".06"/><stop offset=".43" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".22"/></linearGradient>
-    <pattern id="shH" width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0v3" stroke="#000" stroke-opacity=".09" stroke-width="1"/></pattern>
-    <clipPath id="shC"><path d="${FIELD}"/></clipPath>
-    <g id="shCrown">
-      <path d="M14 15.5 12.2 6.6 20 10.4 25.6 3.6 32 9 38.4 3.6 44 10.4 51.8 6.6 50 15.5Z" fill="url(#shG)" stroke="#5A3606" stroke-opacity=".55" stroke-width=".7" stroke-linejoin="round"/>
-      <rect x="13" y="13.2" width="38" height="4.2" rx="1.6" fill="url(#shG)" stroke="#5A3606" stroke-opacity=".5" stroke-width=".6"/>
-      <circle cx="22" cy="15.3" r="1.25" fill="#C0263A"/><circle cx="32" cy="15.3" r="1.35" fill="#1F7A4D"/><circle cx="42" cy="15.3" r="1.25" fill="#C0263A"/>
-      ${[[12.2, 6.6], [25.6, 3.6], [38.4, 3.6], [51.8, 6.6]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.55" fill="#FFF8E6" stroke="#B8902E" stroke-width=".4"/>`).join('')}
-      <circle cx="32" cy="7.2" r="2.1" fill="url(#shG)" stroke="#5A3606" stroke-opacity=".5" stroke-width=".5"/><path d="M32 3.2v2M31 4.2h2" stroke="#7A4E0B" stroke-width=".7" stroke-linecap="round"/>
-      <path d="M15 14.2h34" stroke="#fff" stroke-opacity=".55" stroke-width=".6" stroke-linecap="round"/>
-    </g>`;
-}
-/** Escudo de un bando (usa el sprite). @param {number} idx @param {{cls?:string, title?:string}} [o] */
-export const shield = (idx, o = {}) => `<svg viewBox="0 0 64 82" class="shield ${o.cls || ''}" ${o.title ? `role="img" aria-label="${o.title}"` : 'aria-hidden="true"'}><use href="#shf${idx}"/></svg>`;
 
 /* ---------- Ilustraciones ---------- */
 // Cada ilustración lleva ids propios para que varias copias en la página no se pisen los degradados.
@@ -271,5 +188,5 @@ export function onlineArt(cols, cls = '') {
   </svg>`;
 }
 
-/** Contorno de la península para fondos (recibe el path de la tierra de data/map.json). */
+/** Oro para aros y botones. */
 export const GOLD_STOPS = GOLD;

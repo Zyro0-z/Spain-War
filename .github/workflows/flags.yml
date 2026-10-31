@@ -1,0 +1,26 @@
+name: Banderas
+# Descarga la bandera de cada provincia desde Wikimedia Commons (con su licencia) y la guarda en el repositorio.
+# Se lanza a mano: Actions › Banderas › Run workflow.
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  flags:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm i --no-save playwright@1.49 && npx playwright install --with-deps chromium
+      - run: node scripts/fetch-flags.mjs
+      - run: npm test
+      - name: Guardar las banderas y subir la versión de la caché
+        run: |
+          node -e "const f='sw.js',fs=require('fs');fs.writeFileSync(f,fs.readFileSync(f,'utf8').replace(/eeg-v(\d+)/,(m,n)=>'eeg-v'+(+n+1)))"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/flags data/flags.json CREDITS.md sw.js
+          git diff --cached --quiet || git commit -m "Banderas de las provincias desde Wikimedia Commons"
+          git push

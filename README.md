@@ -6,6 +6,8 @@ Estrategia por turnos con las 47 provincias de la España peninsular. Una ruleta
   <img src="docs/menu.jpg" width="200" alt="Menú">
   <img src="docs/ruleta.jpg" width="200" alt="Ruleta de bandos">
   <img src="docs/combate.jpg" width="200" alt="Combate con dados">
+  <img src="docs/tu-turno.jpg" width="200" alt="Tu turno: elegir objetivo">
+  <img src="docs/sala.jpg" width="200" alt="Sala multijugador con QR">
   <img src="docs/victoria.jpg" width="200" alt="Victoria">
 </p>
 
@@ -26,7 +28,15 @@ Estrategia por turnos con las 47 provincias de la España peninsular. Una ruleta
 ## Modos
 
 - **Normal**: simulación automática con pausa y velocidad x1, x2 y x5. La semilla reproduce la partida exacta en cualquier móvil (`?semilla=CÓDIGO`).
-- **Un jugador** y **Multijugador**: en desarrollo.
+- **Un jugador**: eliges tu provincia (en el mapa o en la lista) y el resto son bots. Cuando la ruleta te elige, atacas a una provincia enemiga limítrofe viendo la probabilidad de cada una; tienes 12 s y, si se agotan, se ataca al mejor objetivo.
+  - Recluta: ataca al azar.
+  - Estratega: busca la mejor probabilidad y evita a los rivales mucho más fuertes.
+  - Mariscal: además remata a los bandos con una sola provincia. En 1500 partidas simuladas, Estratega y Mariscal ganan el ~57 % de los duelos contra Recluta y empatan entre sí; priorizar «cerrar frentes» le hacía perder, así que no lo hace.
+- **Multijugador** (2 a 8 móviles, necesita internet): sala con código de 6 caracteres, enlace y QR. Cada persona controla un bando y el resto son bots; se puede entrar a mirar.
+  - El anfitrión es la autoridad: ejecuta el motor, tira los dados y valida las decisiones; los invitados solo mandan su objetivo.
+  - Mensajes por [ntfy.sh](https://ntfy.sh): todas las rondas de bots hasta el siguiente turno humano van en un solo mensaje (troceado si pasa de 3,8 KB), y ante un 429 se reintenta con espera creciente.
+  - Si cierras Safari, al volver recupera lo perdido con `poll=1&since=`. Si el anfitrión desaparece más de 20 s, la partida se pausa y sigue cuando vuelve. El anfitrión mantiene la pantalla encendida (Wake Lock).
+  - Velocidad x1 o x2 (sin x5 en online).
 
 ## Accesibilidad y ajustes
 
@@ -40,6 +50,7 @@ Sin dependencias en tiempo de ejecución ni compilación: HTML, CSS y módulos d
 npm start            # servidor local en http://localhost:8080
 npm test             # pruebas con node --test
 npm run build:map    # regenera data/map.json (necesita npm install)
+npm run flags        # descarga las banderas de Wikimedia Commons (o Actions › Banderas › Run workflow)
 node scripts/shots.mjs webkit shots   # capturas en tamaño iPhone 14 con WebKit (WebKitWebDriver + Xvfb)
 node scripts/shots.mjs chromium shots # lo mismo con Playwright y Chromium
 node scripts/icons.mjs                # iconos de la app
@@ -47,10 +58,13 @@ node scripts/icons.mjs                # iconos de la app
 
 | Ruta | Contenido |
 | --- | --- |
-| `js/engine/` | Reglas puras y deterministas: generador con semilla, probabilidad exacta y partida |
+| `js/engine/` | Reglas puras y deterministas: generador con semilla, probabilidad exacta, partida y bots |
+| `js/net/` | Sala multijugador: transporte ntfy (y local para pruebas) y protocolo anfitrión/invitado |
+| `js/qr.js` | Código QR propio, sin librerías |
+| `js/flags.js` | Banderas de las provincias |
 | `js/map/render.js` | Mapa en canvas: imagen en memoria, cámara, atenuado, onda de conquista y nombres |
-| `js/ui/` | Menú, partida, ruleta, dados 3D, ajustes y reloj con pausa |
-| `js/art.js` | Paleta de bandos, escudos heráldicos e ilustraciones |
+| `js/ui/` | Menú, partida, conductores (normal, un jugador, anfitrión, invitado), sala, ruleta, dados 3D, ajustes y reloj con pausa |
+| `js/art.js` | Paleta de bandos e ilustraciones |
 | `js/icons.js` | Iconos propios en dos tonos |
 | `js/fx.js` | Sonido (WebAudio), partículas y temblor |
 | `js/store.js` | Estado guardado y migraciones |
@@ -61,3 +75,7 @@ node scripts/icons.mjs                # iconos de la app
 Al publicar cambios, sube la versión de `CACHE` en `sw.js` para que los móviles descarguen la nueva.
 
 Créditos y licencias en [CREDITS.md](CREDITS.md).
+
+## Probar el multijugador sin internet
+
+Abre dos pestañas del mismo navegador con `?red=local` (la sala va por BroadcastChannel en vez de ntfy.sh). Las pruebas del protocolo (`tests/room.test.mjs`) usan un ntfy simulado: orden de mensajes, reconexión, anfitrión caído, tiempo agotado y reintentos ante 429.

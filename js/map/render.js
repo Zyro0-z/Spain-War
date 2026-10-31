@@ -4,7 +4,7 @@
 // y encima se dibujan en vectorial las provincias en disputa, la onda de conquista y los nombres.
 import {lighten, darken, alpha, desaturate, mix} from '../art.js';
 
-/** @typedef {{i:number, name:string, plate:string, d:string, c:number[], label:number[], room:number, bbox:number[], area:number, adj:number[]}} Province */
+/** @typedef {{i:number, ine:string, name:string, plate:string, d:string, c:number[], label:number[], room:number, bbox:number[], area:number, adj:number[]}} Province */
 /** @typedef {{w:number, h:number, provinces:Province[], borders:Record<string,string>, outer:string[], land:string, neutral:string}} MapData */
 /** @typedef {{x:number, y:number, s:number}} Cam */
 
@@ -61,6 +61,7 @@ export class MapView {
     /** @type {Set<number>} candidatas */ this.cands = new Set();
     /** @type {{p:number, from:string, to:string, ox:number, oy:number, t0:number, dur:number, gray:boolean}|null} */ this.wave = null;
     this.labels = true;
+    /** @type {number} bando del jugador (se marca su territorio en oro) */ this.me = -1;
     this.contrast = false;
     this.theme = 'marina';
     this.dpr = Math.min(3, devicePixelRatio || 1);
@@ -345,7 +346,7 @@ export class MapView {
     x.setTransform(1, 0, 0, 1, 0, 0);
     if (still) {
       // Cámara quieta: el fondo (mapa, atenuado, provincias activas y nombres) se pinta una vez a tamaño de pantalla
-      const key = [c.x, c.y, c.s, dim, [...this.active].join(','), this.labels, this.version, this.canvas.width, this.canvas.height, this.wave ? this.wave.p : -1].join('|');
+      const key = [c.x, c.y, c.s, dim, [...this.active].join(','), this.labels, this.me, this.version, this.canvas.width, this.canvas.height, this.wave ? this.wave.p : -1].join('|');
       if (key !== this.snapKey) {
         const sn = this.snap || (this.snap = document.createElement('canvas'));
         if (sn.width !== this.canvas.width || sn.height !== this.canvas.height) { sn.width = this.canvas.width; sn.height = this.canvas.height; }
@@ -415,7 +416,19 @@ export class MapView {
       for (const p of this.active) { this.fillProvince(x, p, this.provColor(p)); this.rimProvince(x, p, this.provColor(p), u); this.glowProvince(x, p, u, 1.6); }
       x.restore();
     }
+    if (this.me >= 0) this.drawMine(x, u);
     if (this.labels) this.drawLabels(x, dim, d);
+  }
+  /** Contorno dorado del territorio del jugador. @param {CanvasRenderingContext2D} x @param {number} u */
+  drawMine(x, u) {
+    const me = this.me, own = (/** @type {number} */ p) => this.owner[p] === me;
+    x.save(); x.lineCap = 'round'; x.lineJoin = 'round';
+    for (const [w, a] of [[7, .18], [2.4, 1]]) {
+      x.strokeStyle = a < 1 ? `rgba(255,214,110,${a})` : '#FFD66E'; x.lineWidth = w * u;
+      for (const [key, bp] of this.borderPaths) { const [a1, b1] = key.split('-').map(Number); if (own(a1) !== own(b1)) x.stroke(bp); }
+      this.map.provinces.forEach(p => { if (own(p.i) && this.map.outer[p.i]) x.stroke(this.outerPaths[p.i]); });
+    }
+    x.restore();
   }
   /** Retícula de estado mayor en toda la pantalla, pegada al mapa. @param {CanvasRenderingContext2D} x @param {Cam} c @param {number} d */
   drawGrid(x, c, d) {

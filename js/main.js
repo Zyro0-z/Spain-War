@@ -1,13 +1,19 @@
 // @ts-check
-// Arranque: carga el mapa, prepara colores y escudos, y alterna entre el menú y la partida.
+// Arranque: carga el mapa y las banderas, prepara colores y alterna entre el menú y los tres modos.
 import {S, save} from './store.js';
 import {graphOf, newGame, playRound} from './engine/game.js';
 import {newSeed, cleanSeed} from './engine/rng.js';
-import {assignColors, shieldSymbol, shieldCommon} from './art.js';
+import {level as toLevel} from './engine/bots.js';
+import {assignColors} from './art.js';
+import {initFlags} from './flags.js';
 import {unlockAudio, freezeFx, stepFx} from './fx.js';
 import {MapView} from './map/render.js';
 import {Match} from './ui/play.js';
+import {NormalDriver, SoloDriver} from './ui/drivers.js';
 import {renderMenu, hideMenu} from './ui/menu.js';
+import {showSetup} from './ui/setup.js';
+import {onlineSheet, resumeOnline, onlineMatch, onlineRoom} from './ui/online.js';
+import {cleanCode} from './net/room.js';
 import {$, applyLook, measureText, makeGrain} from './ui/dom.js';
 
 /** @type {import('./ui/play.js').World} */
@@ -24,36 +30,44 @@ async function boot() {
   const colors = assignColors(graph.adj);
   const names = map.provinces.map((/** @type {{name:string}} */ p) => p.name);
   const plates = map.provinces.map((/** @type {{plate:string}} */ p) => p.plate);
-  const parts = map.provinces.map((/** @type {{plate:string}} */ p, /** @type {number} */ i) => shieldSymbol({color:colors[i], plate:p.plate, idx:i}));
-  $('#sprite').innerHTML = `<defs>${shieldCommon()}${parts.map(p => p.defs).join('')}</defs>${parts.map(p => p.symbol).join('')}`;
   const view = new MapView(/** @type {HTMLCanvasElement} */ ($('#map')), map, colors);
-  W = {map, graph, colors, names, plates, view};
-  if (new URLSearchParams(location.search).has('hq')) view.adaptive = false;
+  W = {map, graph, colors, names, plates, view, onTap:null};
+  /** @type {Record<string, any>} */
+  let flags = {};
+  try { const r = await fetch('data/flags.json'); if (r.ok) flags = await r.json(); } catch (e) {}
+  initFlags(flags, W);
+  const q = new URLSearchParams(location.search);
+  if (q.has('hq')) view.adaptive = false;
   onLook();
   addEventListener('resize', () => { view.resize(!!match); match?.layout(); });
   if (document.fonts) document.fonts.ready.then(() => view.invalidate());
+  // toques en el mapa (elegir provincia u objetivo)
+  $('#map').addEventListener('click', e => W.onTap?.(e.clientX, e.clientY));
   fpsMeter();
-  /** @type {any} */ (window).__eeg = {W, get match() { return match; }, start, menu, freezeFx, stepFx, onPhase:null,
+  /** @type {any} */ (window).__eeg = {W, get match() { return match || onlineMatch(); }, get room() { return onlineRoom(); }, start, solo, menu, freezeFx, stepFx, onPhase:null,
     look:(/** @type {any} */ o) => { Object.assign(S.settings, o); applyLook(); onLook(); }};
 
-  const q = new URLSearchParams(location.search), seed = cleanSeed(q.get('semilla') || '');
-  if (seed) { history.replaceState(null, '', location.pathname); start(seed); }
+  const seed = cleanSeed(q.get('semilla') || ''), sala = cleanCode(q.get('sala') || '');
+  const keep = q.get('red') === 'local' ? '?red=local' : '';
+  if (seed) { history.replaceState(null, '', location.pathname + keep); start(seed); }
+  else if (sala.length === 6) { history.replaceState(null, '', location.pathname + keep); menu(); onlineSheet(W, onlineHooks(), sala); }
+  else if (S.online && S.online.data && S.online.data.phase === 'play') { hideMenu(); resumeOnline(W, onlineHooks()); }
   else menu();
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
 function onLook() {
   const v = W.view, st = S.settings;
-  v.theme = st.theme; v.contrast = st.contrast; v.labels = st.labels && !!match;
+  v.theme = st.theme; v.contrast = st.contrast; v.labels = st.labels && $('#menu').hidden;
   v.rebuild(); v.invalidate();
   $('#fps').hidden = !st.fps;
 }
 
 function menu() {
-  match = null; W.view.labels = false;
+  match = null; W.view.labels = false; W.onTap = null; W.view.me = -1;
   W.view.setInsets({top:innerHeight * .08, bottom:innerHeight * .42, left:0, right:0});
   W.view.setOwners(W.map.provinces.map(p => p.i), W.map.provinces.map(() => false));
-  renderMenu(W, {onNormal:seed => start(seed), onResume:resume, onLook});
+  renderMenu(W, {onNormal:seed => start(seed), onResume:resume, onLook, onSolo:setup, onOnline:() => onlineSheet(W, onlineHooks()), onRoom:room});
   drift();
 }
 /** Fondo del menú: el mapa entero, con un leve vaivén de cámara. */
@@ -71,30 +85,58 @@ function drift() {
   };
   next();
 }
+function leaveMenu() { clearTimeout(driftT); hideMenu(); W.view.labels = S.settings.labels; }
+function onlineHooks() { return {onExit:menu, onLook}; }
+function room() { leaveMenu(); resumeOnline(W, onlineHooks()).then(ok => { if (!ok) menu(); }); }
 
+/* ---------- Normal ---------- */
 /** @param {string} [seed] @param {{skip?:number}} [o] */
 function start(seed, o = {}) {
-  clearTimeout(driftT); hideMenu();
+  leaveMenu();
   const s = cleanSeed(seed || '') || newSeed();
   let game = newGame(W.graph, s);
   if (o.skip) game = fastForward(game, o.skip);
   S.stats.games++; save();
-  run(game);
+  run(game, new NormalDriver(W.graph), 'normal');
+}
+/* ---------- Un jugador ---------- */
+function setup() {
+  leaveMenu();
+  showSetup(W, {onBack:menu, onStart:(me, lv) => solo(me, lv)});
+}
+/** @param {number} me @param {string} lv @param {string} [seed] @param {{skip?:number}} [o] */
+function solo(me, lv, seed, o = {}) {
+  leaveMenu();
+  const level = toLevel(lv), s = cleanSeed(seed || '') || newSeed();
+  let game = newGame(W.graph, s);
+  const driver = new SoloDriver(W.graph, me, level);
+  if (o.skip) for (let i = 0; i < o.skip && game.winner < 0 && game.alive[me]; i++) {
+    game = playRound(W.graph, game, (g, f, t, rng) => f === me ? t[0] : driver.bot(g, f, t, rng)).game;
+  }
+  S.stats.games++; save();
+  run(game, driver, 'solo');
 }
 function resume() {
-  if (!S.current) return menu();
-  clearTimeout(driftT); hideMenu();
-  run(S.current.game);
+  const c = S.current; if (!c) return menu();
+  leaveMenu();
+  if (c.mode === 'solo' && c.me != null) run(c.game, new SoloDriver(W.graph, c.me, toLevel(c.level)), 'solo');
+  else run(c.game, new NormalDriver(W.graph), 'normal');
 }
 /** Avanza rondas sin animar (pruebas y capturas). @param {import('./engine/game.js').Game} g @param {number} n */
 function fastForward(g, n) {
   for (let i = 0; i < n && g.winner < 0; i++) g = playRound(W.graph, g).game;
   return g;
 }
-/** @param {import('./engine/game.js').Game} game */
-function run(game) {
-  match = new Match(W, game, {onExit:menu, onNew:seed => start(seed)});
-  W.view.labels = S.settings.labels;
+/** @param {import('./engine/game.js').Game} game @param {import('./ui/drivers.js').Driver} driver @param {'normal'|'solo'} mode */
+function run(game, driver, mode) {
+  match = new Match(W, game, driver, {
+    onExit:menu,
+    onNew:seed => mode === 'solo' ? solo(driver.me, /** @type {SoloDriver} */ (driver).level, seed) : start(seed),
+    save:g => {
+      S.current = g.winner >= 0 ? null : {mode, game:g, at:Date.now(), ...(mode === 'solo' ? {me:driver.me, level:/** @type {SoloDriver} */ (driver).level} : {})};
+      save();
+    },
+  });
   match.mount();
 }
 

@@ -20,7 +20,14 @@ test('migración: completa lo que falta y corrige lo inválido', () => {
   assert.equal(s.settings.sound, false, 'respeta lo que sí es válido');
   assert.deepEqual(s.history, []);
   assert.equal(s.current, null, 'una partida guardada rota se descarta');
-  assert.deepEqual(migrate(null), fresh());
+  const a = migrate(null), b = fresh();
+  assert.equal(typeof a.profile.id, 'string');
+  a.profile.id = b.profile.id = 'x';
+  assert.deepEqual(a, b);
+  const keep = migrate({profile:{id:'abc', name:'Ana'}, online:{code:'ABC123', at:Date.now(), data:{}}});
+  assert.deepEqual(keep.profile, {id:'abc', name:'Ana'});
+  assert.equal(keep.online.code, 'ABC123');
+  assert.equal(migrate({online:{code:'ABC123', at:Date.now() - 13 * 3600e3, data:{}}}).online, null, 'una sala de hace más de 12 h ya no se recupera');
 });
 
 test('colores: 47 distintos y las vecinas contrastan', () => {

@@ -2,7 +2,7 @@
 // Ruleta de bandos: rueda dibujada una vez en canvas y girada con CSS (va fluida en cualquier móvil).
 // Gira con inercia y frena; cada separador que pasa por la aguja hace tic y la aguja cabecea.
 import {lighten, darken, alpha, inkOn, GOLD_STOPS} from '../art.js';
-import {shield} from '../art.js';
+import {flag} from '../flags.js';
 import {sound, reduced} from '../fx.js';
 import {esc} from './dom.js';
 
@@ -110,7 +110,7 @@ export class Wheel {
     if (idx !== this.cur) {
       this.cur = idx;
       const f = this.items[idx];
-      if (this.hub) this.hub.innerHTML = shield(f);
+      if (this.hub) this.hub.innerHTML = flag(f);
       if (this.nameEl) this.nameEl.textContent = this.world.names[f];
       return true;
     }
