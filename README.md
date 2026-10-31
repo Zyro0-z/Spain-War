@@ -3,10 +3,10 @@
 Estrategia por turnos con las 47 provincias de la España peninsular. Una ruleta elige quién ataca, se tiran tres dados por bando y la provincia cambia de color hasta que solo queda uno. Web app con aspecto de iOS que se instala en el iPhone y funciona sin conexión.
 
 <p align="center">
-  <img src="docs/menu.png" width="200" alt="Menú">
-  <img src="docs/ruleta.png" width="200" alt="Ruleta de bandos">
-  <img src="docs/combate.png" width="200" alt="Combate con dados">
-  <img src="docs/victoria.png" width="200" alt="Victoria">
+  <img src="docs/menu.jpg" width="200" alt="Menú">
+  <img src="docs/ruleta.jpg" width="200" alt="Ruleta de bandos">
+  <img src="docs/combate.jpg" width="200" alt="Combate con dados">
+  <img src="docs/victoria.jpg" width="200" alt="Victoria">
 </p>
 
 ## Instalar en el iPhone
