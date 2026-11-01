@@ -9,6 +9,8 @@ import {buildArtRaw} from './buildart.js';
 const NS = 'http://www.w3.org/2000/svg';
 /** @param {string} tag @param {Record<string, string|number>} [attrs] */
 function el(tag, attrs = {}) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, String(attrs[k])); return e; }
+/** Tela de banderín (sin bandera descargada). */
+const SWALLOW = 'M0.6-12.5h9.6l-2.2 3.1 2.2 3.1H0.6Z';
 const CASTLE = 'M-7 3V-5h2.4v2h1.8v-2h2.8v2h1.8v-2H7V3Z M-2 3V0a2 2 0 0 1 4 0v3Z';
 /** Pictogramas de los edificios (trazo, caja de 12×12 centrada). */
 export const BUILDING_ICON = {
@@ -89,7 +91,7 @@ export class Overlay {
     this.gTok = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-tok'})));
     /** Textos que suben (+3, −20 de oro…). */
     this.gFx = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-fx'})));
-    /** @type {Map<number, {g:SVGGElement, bg:SVGRectElement, txt:SVGTextElement, castle:SVGPathElement, extra:SVGTextElement, flag:SVGGElement, cloth:SVGPathElement, pill:SVGGElement, bld:SVGGElement, bldBg:SVGCircleElement, bldIcon:SVGPathElement, bldIn:SVGGElement, crown:SVGPathElement, cap:boolean, b:string, shine:SVGRectElement, unit:SVGGElement, unitBg:SVGCircleElement, unitIcon:SVGPathElement, u:number}>} */
+    /** @type {Map<number, {g:SVGGElement, bg:SVGRectElement, txt:SVGTextElement, castle:SVGPathElement, extra:SVGTextElement, flag:SVGGElement, cloth:SVGPathElement, pill:SVGGElement, bld:SVGGElement, bldBg:SVGCircleElement, bldIcon:SVGPathElement, bldIn:SVGGElement, crown:SVGPathElement, cap:boolean, clothImg:SVGImageElement, img:string, b:string, shine:SVGRectElement, unit:SVGGElement, unitBg:SVGCircleElement, unitIcon:SVGPathElement, u:number}>} */
     this.tokens = new Map();
     /** @type {{from:number, to:number, col:string, path:SVGPathElement, under:SVGPathElement, head:SVGPathElement, t0:number, dur:number}[]} */
     this.arrows = [];
@@ -116,8 +118,12 @@ export class Overlay {
       unit.append(unitBg, unitIcon);
       // bandera ondeando sobre el castillo de la capital
       const flag = /** @type {SVGGElement} */ (el('g', {class:'tk-flag', transform:'translate(-31 1.5)'}));
-      const cloth = /** @type {SVGPathElement} */ (el('path', {d:'M0.6-11h8.6l-2 2.8 2 2.8H0.6Z', class:'cloth', stroke:'rgba(0,0,0,.45)', 'stroke-width':.5}));
-      flag.append(el('path', {d:'M0 0V-11.5', stroke:'#3D2604', 'stroke-width':1.3, 'stroke-linecap':'round'}), cloth);
+      const cloth = /** @type {SVGPathElement} */ (el('path', {d:SWALLOW, stroke:'rgba(0,0,0,.45)', 'stroke-width':.5}));
+      // bandera de verdad (si está descargada) recortada a la tela
+      const clothImg = /** @type {SVGImageElement} */ (el('image', {x:.6, y:-13, width:12, height:8, preserveAspectRatio:'none'}));
+      clothImg.style.display = 'none';
+      const clothG = el('g', {class:'cloth'}); clothG.append(cloth, clothImg);
+      flag.append(el('path', {d:'M0 0V-13.5', stroke:'#3D2604', 'stroke-width':1.3, 'stroke-linecap':'round'}), clothG);
       const pill = /** @type {SVGGElement} */ (el('g', {class:'tk-pill'}));
       pill.append(bg, shine, txt, unit);
       // edificio de la provincia: insignia redonda abajo a la derecha
@@ -132,12 +138,12 @@ export class Overlay {
       const crown = /** @type {SVGPathElement} */ (el('path', {d:'M-4 1.6h8l1-5-2.6 2L0-4.6-2.4-1.4-5-3.4Z', fill:'url(#tkGold)', stroke:'#3D2604', 'stroke-width':.6, class:'tk-crown', transform:'translate(0 -8.5)'}));
       g.append(flag, castle, pill, bld, crown, extra);
       this.gTok.appendChild(g);
-      this.tokens.set(p, {g, bg, txt, castle, extra, flag, cloth, pill, bld, bldIn, bldBg, bldIcon, b:'', shine, unit, unitBg, unitIcon, u:-2, crown, cap:false});
+      this.tokens.set(p, {g, bg, txt, castle, extra, flag, cloth, pill, bld, bldIn, bldBg, bldIcon, b:'', shine, unit, unitBg, unitIcon, u:-2, crown, cap:false, clothImg, img:''});
     }
   }
   /**
    * Actualiza números y colores.
-   * @param {{owner:number[], troops:(number|null)[], colors:string[], capitals:Set<number>, mine:number, marks?:Map<number, string>, bld?:string[], unit?:number[]}} s
+   * @param {{owner:number[], troops:(number|null)[], colors:string[], capitals:Set<number>, mine:number, marks?:Map<number, string>, bld?:string[], unit?:number[], flagImg?:string[]}} s
    */
   update(s) {
     for (const [p, t] of this.tokens) {
@@ -148,6 +154,12 @@ export class Overlay {
       t.txt.textContent = n == null ? '?' : String(n);
       t.cap = s.capitals.has(p); t.g.classList.toggle('cap', t.cap);
       t.cloth.setAttribute('fill', col);
+      const img = s.flagImg?.[p] || '';
+      if (img !== t.img) {
+        t.img = img; t.clothImg.style.display = img ? '' : 'none';
+        if (img) t.clothImg.setAttribute('href', img);
+        t.cloth.setAttribute('d', img ? 'M0.6-13h12v8h-12Z' : SWALLOW);
+      }
       t.extra.textContent = s.marks?.get(p) || '';
       const b = s.bld?.[p] || '';
       if (b !== t.b) {

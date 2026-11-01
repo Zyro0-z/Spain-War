@@ -14,6 +14,8 @@ export function initFlags(m, world) { manifest = m && typeof m === 'object' ? m 
 /** @param {number} f */
 export const hasFlag = f => !!(W && W.map.provinces[f] && manifest[W.map.provinces[f].ine]);
 export const flagCount = () => Object.keys(manifest).length;
+/** Ruta de la bandera descargada de una provincia ('' si no hay). @param {number} f */
+export const flagSrc = f => W && W.map.provinces[f] && manifest[W.map.provinces[f].ine] ? `data/flags/${W.map.provinces[f].ine}.png` : '';
 /** Rutas de las banderas descargadas (para el modo sin conexión). */
 export const flagFiles = () => Object.keys(manifest).map(ine => `data/flags/${ine}.png`);
 

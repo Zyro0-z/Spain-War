@@ -6,7 +6,7 @@ import * as E from '../conquest/engine.js';
 import {endTurn} from '../conquest/turn.js';
 import {TERRAIN_NAME} from '../conquest/data.js';
 import {score as scoreOf, mult} from '../engine/prob.js';
-import {flag} from '../flags.js';
+import {flag, flagSrc} from '../flags.js';
 import {icon} from '../icons.js';
 import {sound, announce, shake, burstAt, celebrate, reduced, haptic} from '../fx.js';
 import {diceRow, roll, markWin} from './dice.js';
@@ -177,7 +177,8 @@ export class Conquest {
     const marks = new Map();
     for (const gen of g.gens) if (vis.has(gen.p)) marks.set(gen.p, '★');
     this.overlay.update({owner:g.P.owner, troops:g.P.troops.map((t, p) => vis.has(p) ? t : null), colors:g.F.color, capitals:caps, mine:this.me, marks,
-      bld:g.P.bld.map((_, p) => g.P.wonder[p] ? 'maravilla' : vis.has(p) ? mainBuilding(g, p) : ''), unit:g.P.u.map(domUnit)});
+      bld:g.P.bld.map((_, p) => g.P.wonder[p] ? 'maravilla' : vis.has(p) ? mainBuilding(g, p) : ''), unit:g.P.u.map(domUnit),
+      flagImg:g.P.owner.map(f => f >= 0 && !g.F.banner?.[f] && g.F.flag[f] >= 0 ? flagSrc(g.F.flag[f]) : '')});
     this.overlay.cities(this.map.provinces.flatMap((pr, p) => {
       if (!g.P.active[p] || g.P.owner[p] < 0) return [];
       const see = vis.has(p), lv = see ? E.buildingsAt(g, p).reduce((a, [, l]) => a + l, 0) : 0;

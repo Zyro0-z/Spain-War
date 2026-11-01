@@ -54,13 +54,37 @@ const norm = (/** @type {string} */ s) => s.normalize('NFD').replace(/[\u0300-\u
  * Si Wikidata no la tiene: busca en Commons «Bandera/Flag … provincia de NOMBRE».
  * @param {string} name @returns {Promise<string>}
  */
+/** Archivos de las categorías de banderas provinciales de Commons (se piden una vez). @type {string[]|null} */
+let catFiles = null;
+async function categoryFiles() {
+  if (catFiles) return catFiles;
+  catFiles = [];
+  for (const cat of ['Flags of provinces of Spain', 'SVG flags of provinces of Spain', 'Flags of Galicia (provinces)', 'Flags of the Valencian Community', 'Flags of Castile and León']) {
+    let cont = '';
+    for (let i = 0; i < 5; i++) {
+      const d = await json('https://commons.wikimedia.org/w/api.php?action=query&format=json&list=categorymembers&cmtype=file&cmlimit=500&cmtitle=' + encodeURIComponent('Category:' + cat) + (cont ? '&cmcontinue=' + encodeURIComponent(cont) : '')).catch(() => null);
+      if (!d) break;
+      catFiles.push(...(d.query?.categorymembers || []).map((/** @type {{title:string}} */ x) => x.title.replace(/^File:/, '')));
+      cont = d.continue?.cmcontinue || ''; if (!cont) break;
+      await sleep(500);
+    }
+  }
+  return catFiles;
+}
+/** Otros nombres de la provincia que pueden salir en los archivos. */
+const ALIAS = {'A Coruña':['Coruña', 'La Coruña', 'Corunna'], 'Castellón':['Castelló', 'Castellon'], 'Zamora':[]};
 async function searchFlag(name) {
   const short = name.split('/')[0].trim();
-  for (const q of [`Flag of the province of ${short}`, `Bandera de la provincia de ${short}`, `Flag of ${short}`, `Bandera de ${short}`]) {
+  const names = [short, ...(/** @type {Record<string, string[]>} */ (ALIAS)[name] || [])];
+  const flagLike = (/** @type {string} */ t) => /\.(svg|png)$/i.test(t) && /(flag|bandera|bandeira|bandiera)/i.test(t) && !NOT_SPAIN.test(t) && !/(coat|escudo|map|mapa|locator)/i.test(t);
+  const inCat = (await categoryFiles()).filter(t => flagLike(t) && names.some(n => norm(t).includes(norm(n))))
+    .sort((a, b) => (/provinc|diputaci|deputaci/i.test(b) ? 1 : 0) - (/provinc|diputaci|deputaci/i.test(a) ? 1 : 0) || (/\.svg$/i.test(b) ? 1 : 0) - (/\.svg$/i.test(a) ? 1 : 0));
+  if (inCat[0]) return inCat[0];
+  for (const q of names.flatMap(n => [`Flag of the province of ${n}`, `Bandera de la provincia de ${n}`, `Bandeira da provincia da ${n}`, `Bandera Diputación ${n}`])) {
     const d = await json('https://commons.wikimedia.org/w/api.php?action=query&format=json&list=search&srnamespace=6&srlimit=12&srsearch=' + encodeURIComponent(q));
     const hit = (d.query?.search || []).map((/** @type {{title:string}} */ x) => x.title.replace(/^File:/, ''))
       .filter((/** @type {string} */ t) => /\.svg$/i.test(t) && /(flag|bandera|bandeira|bandiera)/i.test(t) && /(provinc|provínc|diputaci|deputaci)/i.test(t)
-        && norm(t).includes(norm(short)) && !NOT_SPAIN.test(t) && !/(coat|escudo|map|mapa|locator|old|antigua|historic)/i.test(t))
+        && names.some(n => norm(t).includes(norm(n))) && !NOT_SPAIN.test(t) && !/(coat|escudo|map|mapa|locator|old|antigua|historic)/i.test(t))
       .sort((/** @type {string} */ a, /** @type {string} */ b) => (/(provinc)/i.test(b) ? 1 : 0) - (/(provinc)/i.test(a) ? 1 : 0))[0];
     if (hit) return hit;
     await sleep(800);
