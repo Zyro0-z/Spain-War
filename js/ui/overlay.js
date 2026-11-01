@@ -3,6 +3,7 @@
 // elegida y de sus objetivos, y flechas de ataque curvas y animadas. Se recoloca en cada fotograma de la cámara
 // (fichas y flechas en píxeles de pantalla: siempre nítidas y del mismo tamaño).
 import {lighten, darken} from '../art.js';
+import {UNIT_ICON, WONDER_ICON} from './glyphs.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 /** @param {string} tag @param {Record<string, string|number>} [attrs] */
@@ -26,6 +27,33 @@ export const BUILDING_ICON = {
   hospital:'M-1.8-5.6h3.6v3.8h3.8v3.6H1.8v3.8h-3.6V1.8h-3.8v-3.6h3.8Z',
 };
 
+/** Colores de la insignia de cada tropa: fondo, borde y trazo. */
+const UNIT_COL = [['#14243F', '#8FC0FF', '#DCEBFF'], ['#3A2510', '#E8A35A', '#FFE0B8'], ['#2B2B2B', '#BDBDBD', '#F2F2F2'], ['#1E3320', '#7FD08A', '#D8F5DC']];
+/** Huecos de las casas de una ciudad (x, base, ancho, alto), del centro hacia fuera. */
+const HOUSES = [[0, -4, 7, 6], [-6, 0, 7, 5], [6, 0, 6, 6], [-11, -3.5, 6, 5], [11, -3.5, 6, 5], [-1, 4, 7, 5], [-14, 1.5, 6, 4.5], [13, 1.5, 6, 5], [-8, 5, 6, 4.5], [8, 5.5, 6, 4.5]];
+const ROOFS = ['#B4532F', '#A2462A', '#C0653A', '#93412A'];
+/**
+ * Ciudad dibujada: casas según su tamaño, catedral, murallas, torre, puerto y maravilla.
+ * @param {{lvl:number, walls:boolean, church:boolean, tower:boolean, port:boolean, wonder:boolean, seed:number}} c
+ */
+function cityMarkup(c) {
+  const n = [3, 4, 6, 8, 10][Math.max(0, Math.min(4, c.lvl - 1))];
+  const ink = 'stroke="#3B2410" stroke-width=".6" stroke-linejoin="round"';
+  const house = (/** @type {number[]} */ [x, y, w, h], /** @type {number} */ i) => {
+    const r = ROOFS[(i + c.seed) % ROOFS.length], wall = i % 3 === 1 ? '#E2CFA9' : '#EEDFC2';
+    return `<rect x="${x - w / 2}" y="${y - h}" width="${w}" height="${h}" fill="${wall}" ${ink}/><path d="M${x - w / 2 - .8} ${y - h}L${x} ${y - h - w * .55}L${x + w / 2 + .8} ${y - h}Z" fill="${r}" ${ink}/><rect x="${x - .8}" y="${y - 2.2}" width="1.6" height="2.2" fill="#4A2E14"/>`;
+  };
+  let out = `<ellipse cx="0" cy="4" rx="${12 + n * 1.3}" ry="5.5" fill="rgba(0,0,0,.28)"/>`;
+  const order = HOUSES.slice(0, n).map((h, i) => /** @type {[number[], number]} */ ([h, i])).sort((a, b) => a[0][1] - b[0][1]);
+  if (c.church) out += `<rect x="-4.5" y="-14" width="9" height="9" fill="#DCCAA2" ${ink}/><path d="M-5.3-14 0-18 5.3-14Z" fill="#6C4A2E" ${ink}/><rect x="2" y="-21" width="3.4" height="11" fill="#E8D8B6" ${ink}/><path d="M1.6-21 3.7-26.5 5.8-21Z" fill="#6C4A2E" ${ink}/><path d="M3.7-26.5v-2.6M2.7-28.1h2" stroke="#FFE9A8" stroke-width=".7"/><circle cx="0" cy="-10" r="1.5" fill="#F2C94C" ${ink}/>`;
+  for (const [h, i] of order) out += house(h, i);
+  if (c.tower) out += `<rect x="${-20}" y="-12" width="4" height="13" fill="#CDB991" ${ink}/><path d="M-20.8-12 -18-16.5 -15.2-12Z" fill="#7A3B22" ${ink}/><rect x="-18.8" y="-9.5" width="1.6" height="2" fill="#3B2410"/>`;
+  if (c.walls) out += `<path d="M-22 9V4.5h2.4v1.4h2.2V4.5h2.4v1.4h2.2V4.5H-10v1.4h2.2V4.5h2.4v1.4h2.2V4.5H-1v1.4h2.2V4.5h2.4v1.4h2.2V4.5H8v1.4h2.2V4.5h2.4v1.4h2.2V4.5H17v1.4h2.2V4.5H22V9Z" fill="#C7AE7E" ${ink}/><rect x="-24" y="1" width="5" height="8" fill="#B89C6A" ${ink}/><rect x="19" y="1" width="5" height="8" fill="#B89C6A" ${ink}/>`;
+  if (c.port) out += `<path d="M18 9h11l-2 3.2h-7.4Z" fill="#7A4A26" ${ink}/><path d="M23.2 9V1.2M23.8 1.8l4 6.2h-4Z" fill="#F4EEDC" ${ink}/>`;
+  if (c.wonder) out += `<g transform="translate(${c.port ? -29 : 25} -2)"><circle r="9.5" fill="rgba(255,214,110,.28)"/><path d="${WONDER_ICON}" transform="scale(1.15)" fill="none" stroke="#3A2405" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/><path d="${WONDER_ICON}" transform="scale(1.15)" fill="none" stroke="#FFD66E" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></g>`;
+  return out;
+}
+
 export class Overlay {
   /** @param {SVGSVGElement} svg @param {import('../map/render.js').MapView} view */
   constructor(svg, view) {
@@ -34,20 +62,33 @@ export class Overlay {
     svg.appendChild(el('defs')).innerHTML = `
       <linearGradient id="tkShine" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".35"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".25"/></linearGradient>
       <linearGradient id="tkGold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF1B8"/><stop offset=".5" stop-color="#F2C94C"/><stop offset="1" stop-color="#9A6A10"/></linearGradient>
-      <radialGradient id="tkBld" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#5A4520"/><stop offset="1" stop-color="#1E1608"/></radialGradient>`;
+      <radialGradient id="tkBld" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#5A4520"/><stop offset="1" stop-color="#1E1608"/></radialGradient>
+      <radialGradient id="tkWon" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#FFF1B8"/><stop offset=".55" stop-color="#E0A62A"/><stop offset="1" stop-color="#7A4E06"/></radialGradient>
+      <pattern id="catRiada" width="10" height="6" patternUnits="userSpaceOnUse"><path d="M0 3q2.5-2.4 5 0t5 0" fill="none" stroke="#9FD3FF" stroke-width=".9" stroke-opacity=".9"/></pattern>
+      <pattern id="catSequia" width="9" height="9" patternUnits="userSpaceOnUse"><path d="M0 4.5l3-1 1.5 2.5 3-2 1.5 1M3 3.5 2.5 0M4.5 6l-.5 3" fill="none" stroke="#5A2E08" stroke-width=".6" stroke-opacity=".75"/></pattern>
+      <pattern id="catNieve" width="8" height="8" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r=".9" fill="#fff"/><circle cx="6" cy="5.5" r=".7" fill="#fff"/><circle cx="4.5" cy="1" r=".45" fill="#fff"/></pattern>
+      <pattern id="catSismo" width="16" height="16" patternUnits="userSpaceOnUse"><path d="M1 2 5 6 4 9 8 12 7 15M5 6 9 5 12 7M8 12 12 11 15 14" fill="none" stroke="#1E1A16" stroke-width=".8" stroke-opacity=".8"/></pattern>
+      <radialGradient id="catFuego"><stop offset="0" stop-color="#FFD24A" stop-opacity=".75"/><stop offset=".55" stop-color="#FF6A1E" stop-opacity=".5"/><stop offset="1" stop-color="#B0200E" stop-opacity=".25"/></radialGradient>`;
     this.gFront = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-front'})));
+    /** Catástrofes en curso (en coordenadas del mapa). */
+    this.gCat = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-cat'})));
+    this.catKey = '';
     this.gMap = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-map'})));
     this.gSmoke = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-smoke'})));
     /** @type {number[]} */ this.smokeAt = [];
     this.gArr = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-arr'})));
+    /** Ciudades que crecen con los edificios (solo con zoom). */
+    this.gCity = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-city'})));
+    /** @type {Map<number, {g:SVGGElement, key:string}>} */ this.cityEls = new Map();
     this.gTok = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-tok'})));
     /** Textos que suben (+3, −20 de oro…). */
     this.gFx = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-fx'})));
-    /** @type {Map<number, {g:SVGGElement, bg:SVGRectElement, txt:SVGTextElement, castle:SVGPathElement, extra:SVGTextElement, flag:SVGGElement, cloth:SVGPathElement, pill:SVGGElement, bld:SVGGElement, bldIcon:SVGPathElement, b:string}>} */
+    /** @type {Map<number, {g:SVGGElement, bg:SVGRectElement, txt:SVGTextElement, castle:SVGPathElement, extra:SVGTextElement, flag:SVGGElement, cloth:SVGPathElement, pill:SVGGElement, bld:SVGGElement, bldBg:SVGCircleElement, bldIcon:SVGPathElement, b:string, shine:SVGRectElement, unit:SVGGElement, unitBg:SVGCircleElement, unitIcon:SVGPathElement, u:number}>} */
     this.tokens = new Map();
     /** @type {{from:number, to:number, col:string, path:SVGPathElement, under:SVGPathElement, head:SVGPathElement, t0:number, dur:number}[]} */
     this.arrows = [];
     this.visible = true;
+    /** @type {boolean|null} */ this.far = null;
     this.raf = 0;
   }
   /** Geometría actual del mapa (cambia con el escenario de la península). */
@@ -57,30 +98,36 @@ export class Overlay {
     this.gTok.innerHTML = ''; this.tokens.clear();
     for (const p of active) {
       const g = /** @type {SVGGElement} */ (el('g', {class:'tk'}));
-      const castle = /** @type {SVGPathElement} */ (el('path', {d:CASTLE, fill:'url(#tkGold)', stroke:'#3D2604', 'stroke-width':.8, transform:'translate(-23 6) scale(.95)', class:'tk-castle'}));
-      const bg = /** @type {SVGRectElement} */ (el('rect', {x:-15, y:-9, width:30, height:18, rx:9}));
-      const shine = el('rect', {x:-15, y:-9, width:30, height:18, rx:9, fill:'url(#tkShine)'});
-      const txt = /** @type {SVGTextElement} */ (el('text', {y:4.6, 'text-anchor':'middle'}));
-      const extra = /** @type {SVGTextElement} */ (el('text', {x:14, y:-6, 'text-anchor':'middle', class:'tk-x'}));
+      const castle = /** @type {SVGPathElement} */ (el('path', {d:CASTLE, fill:'url(#tkGold)', stroke:'#3D2604', 'stroke-width':.8, transform:'translate(-31 6) scale(.95)', class:'tk-castle'}));
+      const bg = /** @type {SVGRectElement} */ (el('rect', {x:-15, y:-9, width:34, height:18, rx:9}));
+      const shine = /** @type {SVGRectElement} */ (el('rect', {x:-15, y:-9, width:34, height:18, rx:9, fill:'url(#tkShine)'}));
+      const txt = /** @type {SVGTextElement} */ (el('text', {x:4, y:4.6, 'text-anchor':'middle'}));
+      const extra = /** @type {SVGTextElement} */ (el('text', {x:18, y:-6, 'text-anchor':'middle', class:'tk-x'}));
+      // tipo de tropa dominante: insignia redonda a la izquierda del número
+      const unit = /** @type {SVGGElement} */ (el('g', {class:'tk-u', transform:'translate(-14 0)'}));
+      const unitBg = /** @type {SVGCircleElement} */ (el('circle', {r:7.4, 'stroke-width':1.2}));
+      const unitIcon = /** @type {SVGPathElement} */ (el('path', {fill:'none', 'stroke-width':1.5, 'stroke-linecap':'round', 'stroke-linejoin':'round', transform:'scale(.82)'}));
+      unit.append(unitBg, unitIcon);
       // bandera ondeando sobre el castillo de la capital
-      const flag = /** @type {SVGGElement} */ (el('g', {class:'tk-flag', transform:'translate(-23 1.5)'}));
+      const flag = /** @type {SVGGElement} */ (el('g', {class:'tk-flag', transform:'translate(-31 1.5)'}));
       const cloth = /** @type {SVGPathElement} */ (el('path', {d:'M0.6-11h8.6l-2 2.8 2 2.8H0.6Z', class:'cloth', stroke:'rgba(0,0,0,.45)', 'stroke-width':.5}));
       flag.append(el('path', {d:'M0 0V-11.5', stroke:'#3D2604', 'stroke-width':1.3, 'stroke-linecap':'round'}), cloth);
       const pill = /** @type {SVGGElement} */ (el('g', {class:'tk-pill'}));
-      pill.append(bg, shine, txt);
+      pill.append(bg, shine, txt, unit);
       // edificio de la provincia: insignia redonda abajo a la derecha
-      const bld = /** @type {SVGGElement} */ (el('g', {class:'tk-b', transform:'translate(17 8)'}));
+      const bld = /** @type {SVGGElement} */ (el('g', {class:'tk-b', transform:'translate(21 8)'}));
       const bldIcon = /** @type {SVGPathElement} */ (el('path', {fill:'none', stroke:'#FFE9A8', 'stroke-width':1.5, 'stroke-linecap':'round', 'stroke-linejoin':'round'}));
-      bld.append(el('circle', {r:7.6, fill:'url(#tkBld)', stroke:'#F2C94C', 'stroke-width':1.1}), bldIcon);
+      const bldBg = /** @type {SVGCircleElement} */ (el('circle', {r:7.6, fill:'url(#tkBld)', stroke:'#F2C94C', 'stroke-width':1.1}));
+      bld.append(bldBg, bldIcon);
       bld.style.display = 'none';
       g.append(flag, castle, pill, bld, extra);
       this.gTok.appendChild(g);
-      this.tokens.set(p, {g, bg, txt, castle, extra, flag, cloth, pill, bld, bldIcon, b:''});
+      this.tokens.set(p, {g, bg, txt, castle, extra, flag, cloth, pill, bld, bldBg, bldIcon, b:'', shine, unit, unitBg, unitIcon, u:-2});
     }
   }
   /**
    * Actualiza números y colores.
-   * @param {{owner:number[], troops:(number|null)[], colors:string[], capitals:Set<number>, mine:number, marks?:Map<number, string>, bld?:string[]}} s
+   * @param {{owner:number[], troops:(number|null)[], colors:string[], capitals:Set<number>, mine:number, marks?:Map<number, string>, bld?:string[], unit?:number[]}} s
    */
   update(s) {
     for (const [p, t] of this.tokens) {
@@ -95,7 +142,20 @@ export class Overlay {
       const b = s.bld?.[p] || '';
       if (b !== t.b) {
         t.b = b; t.bld.style.display = b ? '' : 'none';
-        t.bldIcon.setAttribute('d', BUILDING_ICON[/** @type {'puerto'} */ (b)] || '');
+        const won = b === 'maravilla';
+        t.bldIcon.setAttribute('d', won ? WONDER_ICON : BUILDING_ICON[/** @type {'puerto'} */ (b)] || '');
+        t.bldBg.setAttribute('fill', won ? 'url(#tkWon)' : 'url(#tkBld)');
+        t.bldBg.setAttribute('stroke', won ? '#FFF1B8' : '#F2C94C');
+        t.bldIcon.setAttribute('stroke', won ? '#3A2405' : '#FFE9A8');
+      }
+      const u = n == null ? -1 : s.unit?.[p] ?? 0;
+      if (u !== t.u) {
+        t.u = u; t.unit.style.display = u < 0 ? 'none' : '';
+        if (u >= 0) {
+          const [fill, line, ink] = UNIT_COL[u];
+          t.unitBg.setAttribute('fill', fill); t.unitBg.setAttribute('stroke', line);
+          t.unitIcon.setAttribute('stroke', ink); t.unitIcon.setAttribute('d', UNIT_ICON[u]);
+        }
       }
       t.g.style.display = f < 0 ? 'none' : '';
     }
@@ -113,6 +173,78 @@ export class Overlay {
     for (const p of h.enemy || []) add(p, 'hl-enemy');
     if (h.sel != null && h.sel >= 0) { add(h.sel, 'hl-sel-glow'); add(h.sel, 'hl-sel'); }
     this.sync();
+  }
+  /**
+   * Ciudades: una por provincia, crecen con su categoría y sus edificios. Solo se ven con zoom.
+   * @param {{p:number, lvl:number, walls:boolean, church:boolean, tower:boolean, port:boolean, wonder:boolean}[]} list
+   */
+  cities(list) {
+    const seen = new Set();
+    for (const c of list) {
+      seen.add(c.p);
+      const key = [c.lvl, c.walls, c.church, c.tower, c.port, c.wonder].join();
+      let e = this.cityEls.get(c.p);
+      if (!e) { e = {g:/** @type {SVGGElement} */ (el('g', {class:'city'})), key:''}; this.gCity.appendChild(e.g); this.cityEls.set(c.p, e); }
+      if (e.key !== key) {
+        const grew = e.key !== '';
+        e.key = key; e.g.innerHTML = `<g class="city-in">${cityMarkup({...c, seed:c.p})}</g>`;
+        if (grew) { const i = /** @type {SVGGElement} */ (e.g.firstChild); i.classList.add('grow'); }
+      }
+    }
+    for (const [p, e] of this.cityEls) if (!seen.has(p)) { e.g.remove(); this.cityEls.delete(p); }
+    this.sync();
+  }
+  /**
+   * Catástrofes y efectos sobre provincias: riada, sequía, incendio, terremoto, nevada y bloqueo.
+   * @param {{p:number, kind:string}[]} list
+   */
+  catastrophes(list) {
+    const key = list.map(x => x.kind + x.p).join();
+    if (key === this.catKey) return;
+    this.catKey = key; this.gCat.innerHTML = '';
+    const P = this.map.provinces;
+    const fill = /** @type {Record<string, string>} */ ({riada:'url(#catRiada)', sequia:'url(#catSequia)', incendio:'url(#catFuego)', terremoto:'url(#catSismo)', nevada:'url(#catNieve)', bloqueo:'none'});
+    for (const x of list) {
+      if (!(x.kind in fill) || !P[x.p]) continue;
+      const g = el('g', {class:'cat cat-' + x.kind});
+      g.append(el('path', {d:P[x.p].d, class:'cat-tint', 'fill-rule':'evenodd'}), el('path', {d:P[x.p].d, fill:fill[x.kind], class:'cat-pat', 'fill-rule':'evenodd'}), el('path', {d:P[x.p].d, class:'cat-edge', fill:'none', 'vector-effect':'non-scaling-stroke'}));
+      this.gCat.appendChild(g);
+    }
+    this.sync();
+  }
+  /**
+   * Choque de batalla en un punto de la pantalla: dos espadas que chocan, onda y chispas.
+   * @param {number} x @param {number} y @param {string} ca @param {string} cd
+   */
+  clash(x, y, ca, cd) {
+    const g = /** @type {SVGGElement} */ (el('g', {class:'clash', transform:`translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(1.35)`}));
+    const blade = 'M0 4V-20l2-3 2 3V4 M-4 4h12 M2 4v6';
+    const ring = /** @type {SVGCircleElement} */ (el('circle', {r:4, fill:'none', stroke:'#FFE9A8', 'stroke-width':3}));
+    const sA = /** @type {SVGGElement} */ (el('g')), sD = /** @type {SVGGElement} */ (el('g'));
+    sA.innerHTML = `<path d="${blade}" fill="none" stroke="#2A1A08" stroke-width="5" stroke-linecap="round" transform="translate(-2 0)"/><path d="${blade}" fill="none" stroke="${lighten(ca, .5)}" stroke-width="2.4" stroke-linecap="round" transform="translate(-2 0)"/>`;
+    sD.innerHTML = `<path d="${blade}" fill="none" stroke="#2A1A08" stroke-width="5" stroke-linecap="round" transform="translate(-2 0)"/><path d="${blade}" fill="none" stroke="${lighten(cd, .5)}" stroke-width="2.4" stroke-linecap="round" transform="translate(-2 0)"/>`;
+    const sparks = /** @type {SVGGElement} */ (el('g', {stroke:'#FFD66E', 'stroke-width':2, 'stroke-linecap':'round'}));
+    const dirs = Array.from({length:12}, (_, i) => (i / 12) * Math.PI * 2 + (i % 2) * .2);
+    sparks.innerHTML = dirs.map(() => '<line/>').join('');
+    g.append(ring, sA, sD, sparks);
+    this.gFx.appendChild(g);
+    const t0 = performance.now(), dur = 900;
+    const step = () => {
+      const k = Math.min(1, (performance.now() - t0) / dur), hit = Math.min(1, k / .3), e = 1 - (1 - hit) ** 3;
+      sA.setAttribute('transform', `translate(${(-26 * (1 - e)).toFixed(1)} 6) rotate(${(-75 + 40 * e).toFixed(1)})`);
+      sD.setAttribute('transform', `translate(${(26 * (1 - e)).toFixed(1)} 6) rotate(${(75 - 40 * e).toFixed(1)}) scale(-1 1)`);
+      const after = Math.max(0, (k - .3) / .7);
+      ring.setAttribute('r', (4 + 46 * after).toFixed(1)); ring.style.opacity = String(k < .3 ? 0 : 1 - after);
+      sparks.style.opacity = String(k < .3 ? 0 : 1 - after);
+      sparks.querySelectorAll('line').forEach((l, i) => {
+        const a = dirs[i], r0 = 6 + 26 * after, r1 = r0 + 7 * (1 - after);
+        l.setAttribute('x1', (Math.cos(a) * r0).toFixed(1)); l.setAttribute('y1', (Math.sin(a) * r0).toFixed(1));
+        l.setAttribute('x2', (Math.cos(a) * r1).toFixed(1)); l.setAttribute('y2', (Math.sin(a) * r1).toFixed(1));
+      });
+      g.style.opacity = String(k > .8 ? (1 - k) / .2 : 1);
+      if (k < 1) requestAnimationFrame(step); else g.remove();
+    };
+    requestAnimationFrame(step);
   }
   /** Frentes de guerra: fronteras entre tú y tus enemigos, en rojo. @param {string[]} paths */
   fronts(paths) {
@@ -216,8 +348,28 @@ export class Overlay {
     const ox = f.x + f.w / 2 - c.x * c.s, oy = f.y + f.h / 2 - c.y * c.s;
     this.gMap.setAttribute('transform', `matrix(${c.s},0,0,${c.s},${ox},${oy})`);
     this.gFront.setAttribute('transform', `matrix(${c.s},0,0,${c.s},${ox},${oy})`);
+    this.gCat.setAttribute('transform', `matrix(${c.s},0,0,${c.s},${ox},${oy})`);
+    for (const [p, e] of this.cityEls) {
+      const pr = this.map.provinces[p], room = pr.room * c.s;
+      const tk = this.tokens.get(p), z = c.s / v.fitScale(), on = z >= 1.8 && room >= 22 && !!tk && tk.g.style.display !== 'none';
+      e.g.classList.toggle('on', on);
+      if (!on) continue;
+      const [x, y] = v.toScreen(pr.label[0], pr.label[1] + pr.room * .62), kc = Math.max(.8, Math.min(1.6, .6 + .2 * z));
+      e.g.setAttribute('transform', `translate(${x.toFixed(1)} ${(y + 6).toFixed(1)}) scale(${kc.toFixed(3)})`);
+    }
     this.gSmoke.querySelectorAll('g').forEach(g => { const [x, y] = this.anchor(+(g.getAttribute('data-p') || 0)); g.setAttribute('transform', `translate(${(x + 16).toFixed(1)} ${(y - 6).toFixed(1)})`); });
     const k = Math.max(.8, Math.min(1.35, .55 + .45 * c.s / v.fitScale()));
+    const far = c.s / v.fitScale() < 1.6;
+    if (far !== this.far) {
+      // de lejos la ficha es más estrecha y sin insignia de tropa
+      this.far = far; this.gTok.classList.toggle('far', far);
+      for (const t of this.tokens.values()) {
+        for (const r of [t.bg, t.shine]) { r.setAttribute('x', '-15'); r.setAttribute('width', far ? '30' : '34'); }
+        t.txt.setAttribute('x', far ? '0' : '4');
+        t.castle.setAttribute('transform', `translate(${far ? -23 : -31} 6) scale(.95)`); t.flag.setAttribute('transform', `translate(${far ? -23 : -31} 1.5)`);
+        t.bld.setAttribute('transform', `translate(${far ? 17 : 21} 8)`); t.extra.setAttribute('x', far ? '14' : '18');
+      }
+    }
     for (const [p, t] of this.tokens) {
       if (t.g.style.display === 'none') continue;
       const [x, y] = this.anchor(p);

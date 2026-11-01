@@ -55,6 +55,18 @@ const SCENES = {
   // Conquista (etapas 1–3)
   guerra:`async () => { __eeg.startWar({sc:'las47', me:26, diff:'normal', seed:'GUERRA'}); await ff(8);
     const w = __eeg.war; w.select(w.g.P.owner.indexOf(w.me)); await sleep(1400); }`,
+  // Motor v3: ciudades, catástrofes, reclutar por tipo, tácticas y gobierno
+  ciudad:`async () => { __eeg.startWar({sc:'las47', me:__eeg.W.map.provinces.findIndex(x => x.name === 'Valencia'), diff:'normal', seed:'CIUDAD'}); await sleep(900);
+    const w = __eeg.war, g = w.g, P = n => w.map.provinces.findIndex(x => x.name === n), V = P('Valencia');
+    g.P.bld[V] = {muralla:2, catedral:1, puerto:2, mercado:3, granja:2}; g.P.u[V] = [12, 6, 0, 2]; g.P.troops[V] = 20; g.P.u[P('Murcia')] = [4, 0, 6, 0]; g.P.troops[P('Murcia')] = 10;
+    g.fx.push({kind:'riada', p:P('Cuenca'), f:P('Cuenca'), until:g.turn + 2}, {kind:'incendio', p:P('Teruel'), f:P('Teruel'), until:g.turn + 2}, {kind:'sequia', p:P('Albacete'), f:P('Albacete'), until:g.turn + 2});
+    w.refresh(); w.view.moveTo(w.view.frameOf([V, P('Alicante'), P('Castellón')], 6), 0); await sleep(1200); }`,
+  reclutar:`async () => { __eeg.startWar({sc:'las47', me:__eeg.W.map.provinces.findIndex(x => x.name === 'Valencia'), diff:'normal', seed:'RECLUTA'}); await sleep(900);
+    const w = __eeg.war; w.g.F.gold[w.me] = 300; w.refresh(); w.select(w.me); await sleep(500); document.querySelector('#aRec').click(); await sleep(500); document.querySelector('[data-t="1"]').click(); await sleep(900); }`,
+  tactica:`async () => { __eeg.startWar({sc:'las47', me:__eeg.W.map.provinces.findIndex(x => x.name === 'Valencia'), diff:'normal', seed:'TACTICA'}); await sleep(900);
+    const w = __eeg.war; w.g.P.u[w.me] = [10, 5, 0, 0]; w.g.P.troops[w.me] = 15; w.g.P.ready[w.me] = 15; w.refresh();
+    const q = w.attackTargets(w.me)[0]; w.select(q); await sleep(400); document.querySelector('#aAtt2').click(); await sleep(500); document.querySelector('[data-tac="1"]').click(); await sleep(900); }`,
+  gobierno:`async () => { __eeg.startWar({sc:'las47', me:__eeg.W.map.provinces.findIndex(x => x.name === 'Valencia'), diff:'normal', seed:'GOBIERNO'}); await ff(6); document.querySelector('#wDip').click(); await sleep(500); document.querySelector('[data-tab="council"]').click(); await sleep(900); }`,
   peninsula:`async () => { document.querySelector('#mWar').click(); await sleep(700); document.querySelector('[data-sc="peninsula"]').click(); await sleep(400);
     const s = document.querySelector('#wsSel'); s.value = '15'; s.dispatchEvent(new Event('change')); await sleep(1200); }`,
   bandera:`async () => { document.querySelector('#mWar').click(); await sleep(700); document.querySelector('details.adv summary').click(); await sleep(300);

@@ -1,4 +1,4 @@
-# España en Guerra · Diseño del juego (v2, conquista por turnos)
+# España en Guerra · Diseño del juego (v3, conquista por turnos)
 
 Juegas con un bando y conquistas España provincia a provincia. No hay ruleta: tú decides a quién atacas y cuándo.
 Todo el motor es determinista (generador con semilla, solo aritmética entera) para poder repetir partidas y
@@ -19,44 +19,156 @@ jugar en red por órdenes.
 
 | Dato | Efecto |
 | --- | --- |
-| Población (aprox. INE 2024) | Nivel 1–6: oro por turno y crecimiento |
-| Terreno | Montaña +30 % defensa, sierra +15 % |
-| Costa | Permite puerto |
-| Edificio (uno) | Fortaleza +50 % defensa · Cuartel +2 tropas/turno · Puerto +2 oro · Mercado +50 % oro |
-| Lealtad 0–100 | Conquistada empieza en 25; sube 5–15 por turno; por debajo de 30 rinde la mitad; por debajo de 20 y con menos de 3 tropas puede rebelarse |
-| Suministro | Unida a tu capital por tu territorio (o aliado con Logística 2): si no, mitad de oro, no crece y −30 % ataque |
+| Población (aprox. INE 2024) | Nivel 1–6: oro por turno, crecimiento y huecos de edificio (2 hasta nivel 2, 3 hasta nivel 4, 4 desde 5; +1 la capital) |
+| Terreno | Montaña +30 % defensa, sierra +15 %; la mina pide montaña o sierra |
+| Costa | Permite puerto y astillero; mares conectados para desembarcos y bloqueos |
+| Especialidad | Cereal, vino, hierro, pesca, huerta, olivo, ganado, industria, comercio, minería, turismo o madera (ver abajo) |
+| Cultura | Castellana, catalana, vasca, gallega, andaluza, valenciana, aragonesa, asturleonesa o portuguesa. Distinta a la tuya: −3 de lealtad por turno hasta asimilarla (24 turnos; 12 con La Mezquita) |
+| Impuestos | Bajos 60 % de oro y +4 de lealtad · Normales · Altos 150 % de oro y −6 de lealtad |
+| Postura de defensa | Resistir, emboscada, fortificar o contraataque (ver Combate) |
+| Lealtad 0–100 | Conquistada empieza en 50; por debajo de 30 rinde la mitad; por debajo de 20 y con pocas tropas puede rebelarse (no con catedral nivel 2) |
+| Suministro | Unida a tu capital por tu territorio, aliados federados, un almacén o un general intendente: si no, mitad de oro, no crece y −30 % ataque |
 
-**Oro por provincia** = nivel de población (+2 capital, +2 puerto, ×1,5 mercado), a la mitad sin suministro o con lealtad baja.
-**Crecimiento** = 1 (+1 si nivel ≥ 4, +2 cuartel, +1 capital) hasta un tope de 12 + 4 × nivel (+10 cuartel, +10 capital).
-**Reclutar** = 4 de oro por tropa (3 con cuartel), hasta 10 por provincia y turno.
+### Edificios (niveles 1–3)
+
+Mejorar un edificio no ocupa hueco nuevo. El precio sube con el nivel.
+
+| Edificio | Oro | Nivel 1 → 3 |
+| --- | --- | --- |
+| Granja | 25 | +1 → +3 tropas por turno |
+| Mercado | 40 | +25 % → +75 % de oro aquí |
+| Cuartel | 35 | +1 → +3 tropas por turno, tope +8 → +24, reclutar −1 de oro |
+| Fortaleza | 40 | +25 % → +75 % de defensa |
+| Murallas | 45 | +30 % → +90 % de defensa; solo caen con asedio |
+| Puerto (costa) | 30 | +2 → +6 de oro y rutas comerciales por mar |
+| Mina (montes) | 35 | +2 → +6 de oro |
+| Catedral | 45 | +5 → +15 de lealtad; desde nivel 2, sin revueltas |
+| Torre de vigía (2 niveles) | 25 | Ves tropas y postura a 2 → 3 provincias; +10 → +20 % de defensa |
+| Caminos (2 niveles) | 30 | +1 → +2 de alcance al mover desde aquí |
+| Universidad (Renacimiento) | 50 | Mejoras −10 % → −30 % |
+| Astillero (Renacimiento, costa) | 45 | 2 → 6 barcos por turno |
+| Almacén (Moderna, 2 niveles) | 30 | Suministro aunque esté aislada; tope +6 → +12 |
+| Hospital (Moderna) | 40 | −15 % → −45 % de bajas en batallas de aquí |
+
+### Especialidades
+
+Cereal +1 tropa · Vino +2 oro · Hierro reclutar −1 (artillería −2) · Pesca +2 oro · Huerta +1 tropa y +1 oro ·
+Olivo +3 oro · Ganado +1 oro y caballería −2 · Industria +3 oro y edificios −20 % · Comercio +30 % de oro y +1 por ruta ·
+Minería +2 oro y mina doble · Turismo +4 oro si su dueño está en paz · Madera edificios −20 % y barcos −30 %.
+
+### Maravillas
+
+Una por partida y sitio, en su provincia histórica. Se dibujan en el mapa y suman 30 puntos.
+
+| Maravilla | Oro | Efecto |
+| --- | --- | --- |
+| La Alhambra (Granada) | 160 | +10 % de defensa en todas tus provincias |
+| La Sagrada Familia (Barcelona) | 180 | +15 % de oro |
+| La Mezquita (Córdoba) | 140 | Asimilas el doble de rápido y +3 de lealtad |
+| El Acueducto (Segovia) | 120 | −30 % de mantenimiento |
+| La Catedral de Santiago (A Coruña) | 140 | +10 % de ataque |
+| El Escorial (Madrid) | 160 | +1 general y empiezan en nivel 1 |
+| La Giralda (Sevilla) | 140 | +2 de oro por ruta comercial |
+| Las Murallas de Ávila | 110 | +30 % de defensa en tu capital |
+| El Alcázar de Toledo | 130 | Reclutar −1 de oro |
+| El Pilar (Zaragoza) | 120 | Lo conquistado empieza con 60 de lealtad |
+| La Universidad de Salamanca | 140 | Mejoras −25 % |
+| El Teatro de Mérida (Badajoz) | 120 | Sin revueltas |
+| La Torre de Belém (Portugal) | 140 | Barcos −40 % |
+
+### Economía
+
+**Oro por turno** = provincias (nivel + capital + edificios + especialidad, × mercado × impuestos × era, ministros,
+maravillas y cansancio) + rutas comerciales + tributos − tributos pagados − mantenimiento.
+
+- **Rutas comerciales**: con cada bando en paz, pacto, alianza o vasallaje con el que tengas frontera, o puerto
+  ambos. 2 de oro por ruta (+1 con mercado, +2 La Giralda, +1 ministro mercader). El embargo las corta.
+- **Mantenimiento**: cada provincia mantiene gratis 6 + 2 × nivel de tropas; el resto paga 1 de oro por cada 8
+  (caballería y artillería cuentan doble; la milicia no paga). Cada barco cuesta 1 por turno.
+- **Bancarrota**: con el oro en negativo desertan tropas de las provincias más grandes.
+
+## Ejército
+
+| Tropa | Oro | Ataque | Defensa | Mantenimiento |
+| --- | --- | --- | --- | --- |
+| Infantería | 4 | 100 % | 100 % | 1 |
+| Caballería | 8 | 135 % en llanura, 105 % sierra, 85 % montaña; persigue (menos bajas al ganar) | 90 % | 2 |
+| Artillería (Renacimiento) | 10 | 160 % contra fortaleza o murallas, si no 110 %; abre brecha | 70 % | 2 |
+| Milicia | 2 | No ataca | 95 % | 0 |
+
+- Se recluta hasta 12 por orden y hasta el doble del tope de la provincia.
+- **Generales** (hasta 3; 60 de oro) con árbol de habilidades: asedio, defensa, rapidez, carisma, táctico, veterano,
+  intendente y jinete. Ganan experiencia en batalla (niveles a 3, 6 y 10 victorias) y eligen otra habilidad al subir.
+  Envejecen: se retiran hacia los 50 turnos de servicio y pueden morir en una derrota o asesinados.
+- **Flota**: barcos con astillero (20 de oro). Cada barco lleva 5 tropas en un **desembarco** a cualquier provincia
+  costera del mismo mar o el vecino (−20 % de ataque). Con 3 barcos y más que el enemigo, **bloqueo**: sus puertos
+  no dan oro ni rutas durante 3 turnos.
 
 ## Combate
 
-- Fuerza atacante = tropas × (100 + moral − 100 + Artillería 10/nivel + general + rasgo − 30 sin suministro − 25 invierno en montaña) %.
-- Fuerza defensora = tropas × (100 + moral − 100 + terreno + fortaleza 50 + capital 20 + general + rasgo) %.
-- Cada lado tira 3d6; gana quien saque más con «suma × fuerza». Empate: se repite.
-- La probabilidad exacta se ve antes de atacar (convolución de 3d6 con ambas fuerzas).
-- Pérdidas: el ganador pierde hasta el 70 % de las tropas del perdedor según lo reñido que fue; si pierde el atacante,
-  pierde entre la mitad y todas las que mandó; si gana, conquista y entra con las que le quedan.
-- Moral del bando: +3 al ganar, −3 al perder (entre 50 y 200).
-- Capital tomada: botín del 30 % del oro y −10 de moral al que la pierde, que traslada su capital.
-- Provincia sin defensores: se toma sin combate.
+- Ataque = Σ tropas × ataque de su tipo × (100 + moral − 100 + Armamento 10/nivel + general + táctica + era + ministro
+  + maravilla − cansancio/5 − 30 sin suministro − 25 invierno en montaña − 10 cruzar un río) %.
+- Defensa = tropas × defensa de su tipo × (100 + moral − 100 + terreno + fortaleza + murallas no abiertas + torre
+  + capital 20 + general + rasgo + postura) %.
+- Cada lado tira 3d6; gana quien saque más con «suma × fuerza». Empate: se repite. La probabilidad exacta se ve antes
+  de atacar y cambia en vivo al elegir tropas y táctica.
+
+### Tácticas y posturas
+
+Antes de atacar eliges táctica; el defensor tiene una postura fija por provincia que solo ves si la espías o tienes una
+torre de vigía cerca. Si la postura contrarresta tu táctica, −30 % al ataque (−15 % con un general táctico).
+
+| Táctica | Bonus | La castiga |
+| --- | --- | --- |
+| Asalto | +15 % | Emboscada |
+| Flanqueo | +5 %, +25 % con un tercio de caballería | Fortificar |
+| Asedio | +25 % contra fortaleza o murallas, −10 % si no hay | Contraataque (y más bajas) |
+
+Una postura que no acierta da +5 % al atacante.
+
+### Asedios
+
+Las murallas solo se abren con un asedio: desde una provincia vecina con 5 tropas, en guerra. Cada turno la brecha
+avanza 1 (+1 con 3 artillerías, +1 ministro ingeniero), la guarnición pierde el 10 % y la lealtad baja 10. Cada punto
+de brecha anula un nivel de murallas.
+
+### Cansancio de guerra
+
++2 por turno por cada guerra (hasta +6) y +3 por derrota; −4 por turno en paz. Resta oro (hasta la mitad), lealtad y
+fuerza (1 % por cada 5). Con 60 o más los bots buscan la paz.
 
 ## Diplomacia
 
-Estados entre dos bandos: paz, guerra, pacto de no agresión (10 turnos) y alianza. Relación de −100 a 100.
+Estados entre dos bandos: paz, guerra, pacto de no agresión (10 turnos), alianza y federación. Relación de −100 a 100.
+Las propuestas muestran antes si aceptará y por qué.
 
-| Acción | Condición para que acepte (determinista, se avisa antes) |
+| Acción | Efecto |
 | --- | --- |
-| Paz | Va perdiendo la guerra o la relación es > −20 |
-| Pacto | Relación ≥ 0 y no estáis en guerra |
-| Alianza | Relación ≥ 50 y enemigo común o tú eres fuerte |
-| Regalo (20 / 50 oro) | Relación +10 / +25 |
-| Exigir tributo | Si eres ≥ 3 veces más grande y vecino, paga el 20 % de su oro; si no, se ofende |
-| Anexión pacífica | Tiene ≤ 2 provincias, relación ≥ 60 y tú eres ≥ 4 veces más grande |
-| Declarar guerra | Romper un pacto o alianza: −40 de relación con todos (traición) |
+| Paz · Pacto · Alianza | Como en v2 |
+| Federación | Aliados de larga duración: suministro compartido y rutas comerciales |
+| Boda entre casas | Relación ≥ 20: +20 de relación durante 20 turnos; romperla es traición |
+| Regalo (20 / 50) | +10 / +25 de relación |
+| Exigir tributo | Si eres 3 veces más fuerte y vecino: paga cada turno |
+| Exigir vasallaje | 3 veces más fuerte, vecino y no odiado: te paga tributo, te sigue a la guerra y cuenta para la victoria |
+| Independencia | El vasallo rompe el vasallaje si se ve fuerte |
+| Ultimátum | Exiges una provincia; si no te teme y te odia, te declara la guerra |
+| Comprar provincia | 25 × nivel + 4 × tropas + 15 × niveles de edificio de oro, si te aprecia |
+| Anexión pacífica | ≤ 2 provincias, relación ≥ 60 y 4 veces más fuerte (o tu vasallo) |
+| Embargo | Sin rutas comerciales entre vosotros; −15 de relación |
+| Declarar guerra | Romper pacto, alianza, federación, boda o vasallaje: −40 de relación con todos (traición) |
 
-Al atacar a alguien en paz se le declara la guerra. Sus aliados entran en la guerra.
+Al atacar a alguien en paz se le declara la guerra. Sus aliados y vasallos entran en ella.
+
+### Espionaje
+
+Espiar (15: tropas y postura 3 turnos) · sabotear un edificio (35) · agitar −30 lealtad (25) · asesinar a un general (45) ·
+robar una mejora que él tenga y tú no (50) · sobornar una provincia con lealtad < 40 (su precio). Si falla, empeora la
+relación (mucho si es asesinato o soborno).
+
+### Consejo de ministros
+
+Guerra, hacienda y diplomacia. Cada ministro tiene un rasgo (p. ej. reclutador, recaudador, embajador) y da consejo
+según la situación: fronteras, oro guardado, huecos libres, vecinos dispuestos a pactar. Cambiar uno cuesta 40.
 
 ## Dificultad
 
@@ -69,16 +181,30 @@ Al atacar a alguien en paz se le declara la guerra. Sus aliados entran en la gue
 
 ## Profundidad
 
-- **Mejoras** (4 ramas × 3 niveles; 30/60/100 de oro): Logística (alcance de movimiento y suministro por aliados),
-  Artillería (+10 % ataque por nivel), Diplomacia (+relación y más fácil que acepten), Espionaje (+éxito, más barato).
-- **Generales** (hasta 3; 60 de oro): asedio +15 % ataque, defensa +20 %, rapidez +1 alcance, carisma +10 lealtad.
-  Suben de nivel con victorias. Van con las tropas que salen de su provincia.
-- **Espionaje**: espiar (15), sabotear un edificio (35), agitar −30 lealtad (25). Si falla, −20 de relación.
+- **Mejoras** (4 ramas × 3 niveles; 30/60/100 de oro): Logística (alcance y suministro por aliados), Armamento
+  (+10 % ataque por nivel), Diplomacia (más fácil que acepten) y Espionaje (+éxito, más barato).
+- **Eras**: Medieval; Renacimiento con 4 niveles de mejora (artillería, universidades, astilleros, +10 % de oro);
+  Moderna con 8 (hospitales, almacenes, +10 % de ataque).
+- **Decisiones**: a veces llega una decisión con dos o tres opciones (revuelta, cosecha, mercaderes, refugiados,
+  bandidos, un noble, plata, epidemia, artistas, un desertor). Si no eliges, se toma la última al terminar el turno.
+- **Misiones**: encargos con plazo y premio (tomar una provincia, construir, firmar un acuerdo, reunir tropas, ahorrar).
 - **Eventos** (uno por turno como mucho): sequía, revuelta, fiestas, plaga, desertores, mercaderes, voluntarios, nevada.
+- **Catástrofes regionales**: riada del Ebro, sequía en La Mancha, incendio en la sierra o terremoto en el sureste.
+  Se ven sobre las provincias del mapa mientras duran; las dos últimas destruyen tropas y edificios.
 - **Estaciones**: cada 3 turnos. Invierno: −25 % al atacar montañas y menos crecimiento allí.
-- **Niebla de guerra** (opcional): solo ves las tropas de tus provincias, sus vecinas, las aliadas y las espiadas.
-- **Victoria**: dominación, capitales, diplomática (todos los vivos en pacto o alianza contigo y ≥ 30 % del mapa),
-  supervivencia (campaña) o puntos al llegar a un turno.
+- **Niebla de guerra** (opcional): solo ves las tropas de tus provincias, sus vecinas, las aliadas, las espiadas y las
+  que alcanzan tus torres.
+- **Victoria**: dominación (o 60 % del mapa con todos los demás vasallos tuyos), capitales, diplomática (todos los
+  vivos en pacto, alianza, federación o vasallaje contigo y ≥ 30 % del mapa), supervivencia (campaña) o puntos.
+
+## Mapa
+
+- **Ciudades** dibujadas en cada provincia al acercar: crecen con la población y los edificios, y muestran murallas,
+  catedral, torre, puerto y maravilla.
+- **Fichas**: número de tropas, insignia del tipo de tropa dominante (artillería o caballería si son un tercio),
+  castillo y bandera en las capitales e insignia del edificio principal (dorada si hay maravilla).
+- **Batallas**: flecha, marcha de la ficha, choque de espadas con onda y chispas en la frontera, dados y bajas que suben
+  sobre las dos provincias.
 
 ## Escenarios
 

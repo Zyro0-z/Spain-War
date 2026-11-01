@@ -4,7 +4,11 @@ Estrategia por turnos con las 47 provincias de la España peninsular: elige un b
 
 <p align="center">
   <img src="docs/menu.jpg" width="200" alt="Menú">
-  <img src="docs/guerra.jpg" width="200" alt="Conquista: ficha de provincia">
+  <img src="docs/guerra.jpg" width="200" alt="Conquista: ficha de provincia con huecos de edificio">
+  <img src="docs/ciudad.jpg" width="200" alt="Ciudades que crecen, riada, sequía e incendio en el mapa">
+  <img src="docs/tactica.jpg" width="200" alt="Ataque con tipos de tropa y táctica">
+  <img src="docs/reclutar.jpg" width="200" alt="Reclutar infantería, caballería, artillería o milicia">
+  <img src="docs/gobierno.jpg" width="200" alt="Gobierno: consejo de ministros y misión">
   <img src="docs/peninsula.jpg" width="200" alt="Elegir bando: la península con Portugal">
   <img src="docs/bandera.jpg" width="200" alt="Editor de bandera">
   <img src="docs/cronica.jpg" width="200" alt="Crónica en forma de periódico">
@@ -24,14 +28,15 @@ Estrategia por turnos con las 47 provincias de la España peninsular: elige un b
 
 **Conquista** (un jugador): eliges escenario (las 47 provincias, las comunidades autónomas, los reinos hacia 1200, la península con Portugal, tu región contra las vecinas o tu provincia contra sus vecinas), tu bando y la dificultad. En tu turno tocas una provincia para atacar, mover tropas, reclutar, construir, espiar o hablar con otro bando; al terminar el turno actúan los bots.
 
-- Combate con dados: cada lado tira 3d6 y gana quien saque más con «suma × fuerza». La fuerza sale de las tropas, el terreno, los edificios, la moral y los generales, y la probabilidad exacta se ve antes de atacar.
-- Oro por provincia según su población; con él reclutas, construyes y haces diplomacia.
-- Diplomacia: paz, pacto de no agresión, alianza, regalos, tributo y anexión pacífica. Antes de proponer ves si aceptarán y por qué. Romper un pacto es traición: todos desconfían.
+- Combate con dados: cada lado tira 3d6 y gana quien saque más con «suma × fuerza». La fuerza sale de las tropas y su tipo, el terreno, los edificios, la moral, los generales y la táctica, y la probabilidad exacta se ve antes de atacar.
+- Ejército: infantería, caballería (fuerte en llanura), artillería (abre murallas, desde el Renacimiento) y milicia (barata, solo defiende). Antes de atacar eliges táctica (asalto, flanqueo o asedio) contra la postura del defensor (emboscada, fortificar o contraataque), que solo ves si la espías. Las murallas exigen un asedio de varios turnos. Flota con desembarcos y bloqueos.
+- Economía: oro por población, especialidad de cada provincia (vino, hierro, olivo, pesca…), impuestos ajustables, rutas comerciales con tus vecinos en paz y mantenimiento del ejército (si no pagas, desertan). Edificios con niveles en 2–4 huecos por provincia (granja, mercado, cuartel, fortaleza, murallas, puerto, mina, catedral, torre de vigía, caminos, universidad, astillero, almacén, hospital) y 13 maravillas únicas (la Alhambra, la Sagrada Familia, el Acueducto…).
+- Diplomacia: paz, pacto, alianza, federación, bodas, regalos, tributo, vasallaje, ultimátum, compra de provincias, embargo y anexión pacífica. Antes de proponer ves si aceptarán y por qué. Romper un acuerdo es traición: todos desconfían. El cansancio de guerra pesa en el oro y la lealtad.
 - Dificultad: **Fácil**, todos en paz y solo pelea contigo quien atacas · **Normal**, los bots se hacen la guerra y te atacan si te ven débil o si creces mucho · **Difícil**, guerra total y coalición contra el líder.
-- Profundidad: terreno (montañas y sierras defienden mejor, y cruzar uno de los grandes ríos da +10 % al que defiende), suministro desde tu capital, lealtad y rebeliones en lo conquistado, edificios (fortaleza, cuartel, puerto, mercado), árbol de mejoras (logística, artillería, diplomacia, espionaje), generales con habilidades que suben de nivel, espionaje, eventos y estaciones con nieve en invierno.
+- Profundidad: terreno (montañas y sierras defienden mejor, y cruzar uno de los grandes ríos da +10 % al que defiende), suministro desde tu capital, lealtad, cultura y asimilación de lo conquistado, rebeliones, árbol de mejoras que te lleva de la era Medieval al Renacimiento y a la Moderna, generales con árbol de habilidades que envejecen y pueden morir, espionaje (espiar, sabotear, agitar, asesinar, robar saberes, sobornar), consejo de ministros que aconseja, decisiones con varias opciones, misiones con premio, eventos, catástrofes regionales y estaciones con nieve en invierno.
 - Personalizar (plegado): bando propio con nombre, lema, color en el mapa y bandera hecha en el editor (diseño, colores y símbolo), rasgo del líder, tropas al empezar, oro, número de rivales (el resto empieza como tierras libres), niebla de guerra, eventos, estaciones y tipo de victoria (dominación, capitales, diplomática, puntos o sobrevivir).
 - Campaña de 8 misiones encadenadas con hasta 3 estrellas según los turnos, desafío del día (la misma partida para todos, 30 turnos a puntos, con clasificación) y tutorial interactivo.
-- En el mapa: ríos, olas en la costa, nubes, banderas ondeando sobre las capitales y fichas de ejército que marchan al mover y atacar.
+- En el mapa: ríos, olas en la costa, nubes, ciudades que crecen con sus edificios (murallas, catedral, puerto, maravilla), catástrofes sobre las provincias, banderas ondeando sobre las capitales, fichas con el tipo de tropa que marchan al mover y atacar, y choque de espadas con las bajas en cada batalla. Panel de poder con la clasificación de todos los bandos.
 - Titular de periódico en cada turno y crónica completa al empezar cada año, final con repetición del mapa turno a turno y gráfica del poder, 20 logros con medallas y música sintetizada que se vuelve tensa en guerra.
 - Las partidas se guardan solas (hasta 5) y puedes deshacer movimientos, reclutas y edificios hasta tu último ataque.
 

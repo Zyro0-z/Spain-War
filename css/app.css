@@ -797,3 +797,25 @@ details.adv[open] summary::after{content:" −"}
 .mis-chip .ic{width:14px;height:14px}
 .rowi.bl .l{display:block}
 .wonder-row .rowi{background:linear-gradient(90deg,rgba(242,201,76,.16),transparent)}
+/* ===== v3: ciudades, catástrofes, insignias de tropa y choque de batalla ===== */
+.ov-city .city{opacity:0;transition:opacity .35s;pointer-events:none}
+.ov-city .city.on{opacity:1}
+.ov-city .city-in{transform-box:fill-box;transform-origin:50% 100%}
+.ov-city .city-in.grow{animation:cityGrow .9s var(--bounce)}
+@keyframes cityGrow{0%{transform:scale(.6);filter:brightness(1.8)}60%{transform:scale(1.12)}100%{transform:none;filter:none}}
+.ov-cat .cat{pointer-events:none}
+.ov-cat .cat-tint{fill:transparent}
+.ov-cat .cat-edge{stroke-width:2.2px;stroke-dasharray:6 4}
+.cat-riada .cat-tint{fill:rgba(40,120,230,.32)}.cat-riada .cat-edge{stroke:#8FD0FF}.cat-riada .cat-pat{animation:catFlow 2.4s linear infinite}
+.cat-sequia .cat-tint{fill:rgba(214,140,48,.36)}.cat-sequia .cat-edge{stroke:#F2B25C}
+.cat-incendio .cat-tint{fill:rgba(255,90,30,.22)}.cat-incendio .cat-edge{stroke:#FF7A3C;stroke-dasharray:none}.cat-incendio .cat-pat{animation:catFire 1.1s ease-in-out infinite alternate}
+.cat-terremoto .cat-tint{fill:rgba(60,48,40,.3)}.cat-terremoto .cat-edge{stroke:#C9B49A}
+.cat-nevada .cat-tint{fill:rgba(235,245,255,.32)}.cat-nevada .cat-edge{stroke:#fff;stroke-dasharray:2 4}
+.cat-bloqueo .cat-edge{stroke:#5FA8FF;stroke-width:3px;stroke-dasharray:3 5;animation:catMarch 1.2s linear infinite}
+@keyframes catFlow{to{transform:translateX(10px)}}
+@keyframes catFire{from{opacity:.55}to{opacity:1}}
+@keyframes catMarch{to{stroke-dashoffset:-16}}
+.tk-u{filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
+.clash{pointer-events:none}
+@media (prefers-reduced-motion:reduce){.cat-riada .cat-pat,.cat-incendio .cat-pat,.cat-bloqueo .cat-edge,.ov-city .city-in.grow{animation:none}}
+.ov-tok.far .tk-u{display:none}

@@ -56,6 +56,8 @@ const STATUS_CLS = ['peace', 'war', 'pact', 'ally'];
 /** Orden en el que se enseña el edificio principal de una provincia en su ficha del mapa. */
 const BLD_ORDER = ['muralla', 'fortaleza', 'astillero', 'universidad', 'catedral', 'puerto', 'mercado', 'cuartel', 'mina', 'hospital', 'torre', 'almacen', 'granja', 'caminos'];
 /** @param {Game} g @param {number} p */
+/** Tipo de tropa que se ve en la ficha: artillería o caballería si son un tercio, si no la mayoría. @param {number[]} u */
+const domUnit = u => { const n = u[0] + u[1] + u[2] + u[3]; return !n ? 0 : u[2] * 3 >= n ? 2 : u[1] * 3 >= n ? 1 : u[3] > u[0] ? 3 : 0; };
 const mainBuilding = (g, p) => E.buildingsAt(g, p).sort((a, b) => b[1] - a[1] || BLD_ORDER.indexOf(a[0]) - BLD_ORDER.indexOf(b[0]))[0]?.[0] || '';
 /** Pictograma de un edificio en su insignia. @param {string} b */
 const bico = b => `<svg class="bico" viewBox="-8 -8 16 16" aria-hidden="true"><circle r="7.6"/><path d="${BUILDING_ICON[/** @type {'puerto'} */ (b)] || ''}"/></svg>`;
@@ -172,7 +174,15 @@ export class Conquest {
     const caps = new Set(g.F.capital.filter((c, f) => c >= 0 && g.F.alive[f]));
     const marks = new Map();
     for (const gen of g.gens) if (vis.has(gen.p)) marks.set(gen.p, '★');
-    this.overlay.update({owner:g.P.owner, troops:g.P.troops.map((t, p) => vis.has(p) ? t : null), colors:g.F.color, capitals:caps, mine:this.me, marks, bld:g.P.bld.map((_, p) => vis.has(p) ? mainBuilding(g, p) : '')});
+    this.overlay.update({owner:g.P.owner, troops:g.P.troops.map((t, p) => vis.has(p) ? t : null), colors:g.F.color, capitals:caps, mine:this.me, marks,
+      bld:g.P.bld.map((_, p) => g.P.wonder[p] ? 'maravilla' : vis.has(p) ? mainBuilding(g, p) : ''), unit:g.P.u.map(domUnit)});
+    this.overlay.cities(this.map.provinces.flatMap((pr, p) => {
+      if (!g.P.active[p] || g.P.owner[p] < 0) return [];
+      const see = vis.has(p), lv = see ? E.buildingsAt(g, p).reduce((a, [, l]) => a + l, 0) : 0;
+      return [{p, lvl:Math.min(5, 1 + Math.floor((this.geo.tier[p] - 1) / 2) + Math.floor(lv / 3)), walls:see && E.lvl(g, p, 'muralla') > 0, church:see && E.lvl(g, p, 'catedral') > 0,
+        tower:see && E.lvl(g, p, 'torre') > 0, port:see && (E.lvl(g, p, 'puerto') > 0 || E.lvl(g, p, 'astillero') > 0), wonder:!!g.P.wonder[p]}];
+    }));
+    this.overlay.catastrophes(g.fx.filter(x => x.until >= g.turn && g.P.active[x.p]).map(x => ({p:x.p, kind:x.kind})));
     // frentes de guerra contigo
     const fronts = [];
     for (const [key, d] of Object.entries(this.map.borders)) {
@@ -513,6 +523,7 @@ export class Conquest {
         <div class="score num" data-score></div>
         <span class="delta" data-delta></span>
       </div>`;
+    { const m0 = view.borderMid(a.to, [a.from]), [cx, cy] = view.toScreen(m0[0], m0[1]); this.overlay.clash(cx, cy, colA, colD); sound('impact'); }
     $('#wBar').innerHTML = `<div class="wpanel glass combat">
       <div class="prob"><span class="pv num" style="--pc:${colA}">${pct(a.p)}</span>
         <div><div class="lbl">Probabilidad de victoria</div><div class="pbar" style="--ca:${colA};--cd:${colD}"><i style="width:${(a.p * 100).toFixed(1)}%"></i></div></div>
@@ -538,6 +549,8 @@ export class Conquest {
     win.classList.add('win'); lose.classList.add('lose'); markWin(/** @type {HTMLElement} */ (win.querySelector('.dice')));
     const dl = (/** @type {HTMLElement} */ el, /** @type {number} */ v) => { const d = /** @type {HTMLElement} */ (el.querySelector('[data-delta]')); d.textContent = v ? '−' + v : '0'; d.className = 'delta show down'; };
     dl(att, a.attLoss); dl(def, a.won ? a.D : a.defLoss);
+    if (a.attLoss) this.overlay.float(a.from, '−' + a.attLoss, 'loss');
+    if (a.won ? a.D : a.defLoss) this.overlay.float(a.to, '−' + (a.won ? a.D : a.defLoss), 'loss', 150);
     const mid = view.borderMid(a.to, [a.from]), [sx, sy] = view.toScreen(mid[0], mid[1]);
     const meWon = (a.f === this.me) === a.won;
     if (a.won) {
@@ -782,6 +795,7 @@ export class Conquest {
       if (!batch.length) return;
       const b = batch; batch = [];
       await Promise.all(b.flatMap(e => [this.overlay.arrow(e.from, e.to, before.F.color[e.f] || '#fff', {dur:step()}), this.overlay.march(e.from, e.to, before.F.color[e.f] || '#fff', e.n, step(), e.won ? 1 : .5)]));
+      if (!reduced()) for (const e of b) if (e.rolls?.length) { const m = view.borderMid(e.to, [e.from]), [x, y] = view.toScreen(m[0], m[1]); this.overlay.clash(x, y, before.F.color[e.f] || '#fff', e.d >= 0 ? before.F.color[e.d] || '#888' : '#888'); }
       for (const e of b) if (e.won) owner[e.to] = e.f;
       view.setOwners(owner);
     };
