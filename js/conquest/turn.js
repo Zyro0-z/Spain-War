@@ -5,7 +5,7 @@ import {int} from '../engine/rng.js';
 import {
   WAR, PEACE, PACT, ALLY, COST, TECHS, clone, counts, rebels, strength, supplied, income, growth, cap, odds,
   doAction, declareWar, setStatus, relAdd, emit, clamp, eliminate, encode, checkVictory, wouldAccept, generalsOf,
-  buildCost, season, effectOn, provincesOf,
+  buildCost, season, effectOn, provincesOf, RuleError,
 } from './engine.js';
 
 /** @typedef {import('./engine.js').Game} Game */
@@ -21,12 +21,51 @@ const MAX_ATTACKS = 10;
  */
 export function endTurn(geo, g0) {
   const g = clone(g0); g.log = [];
-  if (g.over) return {g, ev:[]};
+  runTurn(geo, g);
+  return {g, ev:g.log};
+}
+/** Bots y mantenimiento sobre la partida (sin copiarla). @param {Geo} geo @param {Game} g */
+export function runTurn(geo, g) {
+  if (g.over) return;
   const R = rebels(g), order = [];
   for (let i = 0; i < R; i++) order.push((i + g.turn * 7) % R);
   for (const f of order) if (g.F.alive[f] && !g.humans.includes(f) && !g.over) aiTurn(geo, g, f);
   if (!g.over) upkeep(geo, g);
+}
+
+/* ======================= Multijugador ======================= */
+/**
+ * Resuelve un turno con las órdenes de todos los humanos: se aplican por jugador, en un orden que rota cada
+ * turno; la orden que ya no vale (la provincia cambió de manos, faltan tropas…) se anula y queda apuntada.
+ * Luego juegan los bots y llega el mantenimiento. Todos los móviles calculan lo mismo.
+ * @param {Geo} geo @param {Game} g0 @param {Record<number, any[]>} orders @param {number[]} [drop] humanos que pasan a ser bots
+ * @returns {{g:Game, ev:any[]}}
+ */
+export function resolveTurn(geo, g0, orders, drop = []) {
+  const g = clone(g0); g.log = [];
+  if (g.over) return {g, ev:[]};
+  if (drop.length) g.humans = g.humans.filter(h => !drop.includes(h));
+  const hs = g.humans.filter(f => g.F.alive[f]).sort((a, b) => a - b);
+  const r = hs.length ? g.turn % hs.length : 0;
+  for (const f of [...hs.slice(r), ...hs.slice(0, r)]) {
+    for (const raw of Array.isArray(orders[f]) ? orders[f].slice(0, 300) : []) {
+      if (g.over || !g.F.alive[f]) break;
+      const a = cleanAction(raw, f);
+      try { doAction(geo, g, a); } catch (e) { emit(g, {t:'cancel', f, a, why:e instanceof RuleError ? e.message : 'Orden no válida'}); }
+    }
+  }
+  runTurn(geo, g);
   return {g, ev:g.log};
+}
+/** Copia limpia de una orden recibida por la red (solo campos conocidos y con su tipo). @param {any} a @param {number} f */
+export function cleanAction(a, f) {
+  /** @type {any} */ const o = {type:typeof a?.type === 'string' ? a.type.slice(0, 12) : '', f};
+  for (const k of ['from', 'to', 'n', 'p', 'd', 'amount', 'i', 'q']) if (a?.[k] != null && Number.isFinite(+a[k])) o[k] = Math.floor(+a[k]);
+  for (const k of ['b', 'k', 'skill', 'kind']) if (typeof a?.[k] === 'string') o[k] = a[k].slice(0, 16);
+  for (const k of ['gen', 'accept']) if (a?.[k] != null) o[k] = !!a[k];
+  if (o.type === 'answer' && a?.from != null) o.from = Math.floor(+a.from);
+  if (Array.isArray(a?.x) && a.x.length === 2) o.x = [Math.floor(+a.x[0]), Math.floor(+a.x[1])];
+  return o;
 }
 
 /* ======================= IA ======================= */

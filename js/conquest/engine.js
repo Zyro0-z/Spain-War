@@ -101,23 +101,28 @@ export const DIFFICULTY = {
  * @property {string[]} hist dueños por turno
  * @property {{kind:string, id:string}} [tag] campaña, desafío diario o tutorial
  * @property {{n:number, t:string, a:number, b?:number, p?:number, k?:string}[]} [chron] crónica: sucesos destacados
+ * @property {string[]} [motto] lema de cada bando (bando propio)
  * @property {any[]} log sucesos del turno en curso
  */
-/** @typedef {{n:number, adj:number[][], ine:string[], tier:number[], terrain:('m'|'s'|'l')[], coast:boolean[]}} Geo */
+/** @typedef {{n:number, adj:number[][], ine:string[], tier:number[], terrain:('m'|'s'|'l')[], coast:boolean[], river:Record<string, string>}} Geo */
 
 /* ======================= Geografía ======================= */
-/** @param {{provinces:{adj:number[], ine:string}[]}} map @returns {Geo} */
+/** @param {{provinces:{adj:number[], ine:string}[], rivers?:{cross?:Record<string, string>}}} map @returns {Geo} */
 export function geoOf(map) {
   const ine = map.provinces.map(p => p.ine);
-  return {n:ine.length, adj:map.provinces.map(p => p.adj), ine, tier:ine.map(tier), terrain:ine.map(terrain), coast:ine.map(coastal)};
+  return {n:ine.length, adj:map.provinces.map(p => p.adj), ine, tier:ine.map(tier), terrain:ine.map(terrain), coast:ine.map(coastal), river:map.rivers?.cross || {}};
 }
+/** Río que hay que cruzar para atacar de una provincia a otra ('' si ninguno). @param {Geo} geo @param {number} a @param {number} b */
+export const riverBetween = (geo, a, b) => (geo.river || {})[a < b ? `${a}-${b}` : `${b}-${a}`] || '';
+export const RIVER_DEF = 10;
 
 /* ======================= Creación ======================= */
 /**
  * @typedef {object} ScenarioSpec
  * @property {string} id
  * @property {number} [center] provincia elegida (escenarios parciales)
- * @property {{name:string, flag:number, color:string, provinces:number[], capital:number, banner?:any}[]} factions
+ * @property {number[]} [neutral] provincias en juego sin bando (tierras libres, de los rebeldes)
+ * @property {{name:string, flag:number, color:string, provinces:number[], capital:number, banner?:any, motto?:string}[]} factions
  */
 /**
  * @param {Geo} geo @param {ScenarioSpec} sc @param {{seed:string, humans:number[], rules?:Partial<Rules>, traits?:Record<number, string>}} o
@@ -130,6 +135,7 @@ export function createGame(geo, sc, o) {
   const rng = seedState('eeg2:' + o.seed);
   const owner = new Array(geo.n).fill(-1), active = new Array(geo.n).fill(false);
   sc.factions.forEach((f, i) => f.provinces.forEach(p => { owner[p] = i; active[p] = true; }));
+  for (const p of sc.neutral || []) if (owner[p] < 0) { owner[p] = R; active[p] = true; }
   const capital = [...sc.factions.map(f => f.capital), -1];
   const troops = owner.map((f, p) => f < 0 ? 0 : rules.startTroops + (capital[f] === p ? 4 : 0));
   const sq = (/** @type {number} */ v) => Array.from({length:nf + 1}, () => new Array(nf + 1).fill(v));
@@ -139,9 +145,10 @@ export function createGame(geo, sc, o) {
   const g = {
     v:2, seed:o.seed, rng, turn:1, winner:-1, over:false, scenario:sc.id, rules, humans:[...o.humans],
     P:{owner, troops, ready:[...troops], bld:new Array(geo.n).fill(''), loyal:owner.map(f => f < 0 ? 0 : 100), origin:[...owner], active},
-    F:{name:[...sc.factions.map(f => f.name), 'Rebeldes'], flag:[...sc.factions.map(f => f.flag), -1], color:[...sc.factions.map(f => f.color), '#6B6F7A'],
+    F:{name:[...sc.factions.map(f => f.name), sc.neutral?.length ? 'Tierras libres' : 'Rebeldes'], flag:[...sc.factions.map(f => f.flag), -1], color:[...sc.factions.map(f => f.color), '#6B6F7A'],
       capital, home:[...capital], gold:new Array(nf + 1).fill(20), morale:new Array(nf + 1).fill(100), alive:[...sc.factions.map(() => true), false],
       tech:Array.from({length:nf + 1}, () => [0, 0, 0, 0]), trait, banner:[...sc.factions.map(f => f.banner || null), null]},
+    motto:[...sc.factions.map(f => f.motto || ''), ''],
     rel:sq(0), st:sq(PEACE), until:sq(0),
     gens:[], genSeq:0, intel:[], fx:[], offers:[],
     stats:{conq:new Array(nf + 1).fill(0), won:new Array(nf + 1).fill(0), lost:new Array(nf + 1).fill(0), caps:new Array(nf + 1).fill(0), peak:counts(owner, nf + 1), betrayals:new Array(nf + 1).fill(0)},
@@ -287,10 +294,10 @@ export function attackMul(geo, g, f, from, to, gen = true) {
   if (g.rules.seasons && season(g) === 3 && geo.terrain[to] !== 'l') m -= 25;
   return Math.max(20, m);
 }
-/** Multiplicador de defensa (porcentaje). @param {Geo} geo @param {Game} g @param {number} p */
-export function defenseMul(geo, g, p) {
+/** Multiplicador de defensa (porcentaje). Con `from`, cuenta el río entre las dos. @param {Geo} geo @param {Game} g @param {number} p @param {number} [from] */
+export function defenseMul(geo, g, p, from = -1) {
   const d = g.P.owner[p];
-  let m = 100 + TERRAIN_DEF[geo.terrain[p]] + (g.P.bld[p] === 'fortaleza' ? 50 : 0);
+  let m = 100 + TERRAIN_DEF[geo.terrain[p]] + (g.P.bld[p] === 'fortaleza' ? 50 : 0) + (from >= 0 && riverBetween(geo, from, p) ? RIVER_DEF : 0);
   if (d >= 0 && d !== rebels(g)) {
     m += g.F.morale[d] - 100;
     if (g.F.capital[d] === p) m += 20;
@@ -305,7 +312,7 @@ export function defenseMul(geo, g, p) {
  * @param {Geo} geo @param {Game} g @param {number} f @param {number} from @param {number} to @param {number} n
  */
 export function odds(geo, g, f, from, to, n) {
-  const D = g.P.troops[to], mA = attackMul(geo, g, f, from, to), mD = defenseMul(geo, g, to);
+  const D = g.P.troops[to], mA = attackMul(geo, g, f, from, to), mD = defenseMul(geo, g, to, from);
   if (D <= 0) return {p:1, SA:n * mA, SD:0, mA, mD, D};
   const SA = n * mA, SD = D * mD;
   return {p:winProb(SA, SD).p, SA, SD, mA, mD, D};
@@ -336,9 +343,9 @@ export function declareWar(g, a, b, why = '') {
 }
 
 /* ======================= Generales ======================= */
-/** @param {Game} g @param {number} f @param {number} p @param {Skill} skill */
-function hireFree(g, f, p, skill) {
-  const name = GIVEN[int(g.rng, GIVEN.length)] + ' ' + EPITHET[int(g.rng, EPITHET.length)];
+/** @param {Game} g @param {number} f @param {number} p @param {Skill} skill @param {import('../engine/rng.js').RngState} [rng] */
+function hireFree(g, f, p, skill, rng = g.rng) {
+  const name = GIVEN[int(rng, GIVEN.length)] + ' ' + EPITHET[int(rng, EPITHET.length)];
   const gen = {id:++g.genSeq, f, p, name, skill, xp:0, lvl:0};
   g.gens.push(gen);
   return gen;
@@ -349,15 +356,23 @@ function gainXp(g, gen) { gen.xp++; const lvl = gen.xp >= 6 ? 2 : gen.xp >= 3 ? 
 /* ======================= Acciones ======================= */
 /**
  * @typedef {{type:'move', f:number, from:number, to:number, n:number, gen?:boolean}
- *  | {type:'attack', f:number, from:number, to:number, n:number, gen?:boolean}
+ *  | {type:'attack', f:number, from:number, to:number, n:number, gen?:boolean, q?:number, x?:number[]}
  *  | {type:'recruit', f:number, p:number, n:number}
  *  | {type:'build', f:number, p:number, b:Building}
  *  | {type:'research', f:number, k:Tech}
  *  | {type:'hire', f:number, p:number, skill:Skill}
  *  | {type:'spy', f:number, p:number, kind:'espiar'|'sabotear'|'agitar'}
  *  | {type:'diplo', f:number, d:number, kind:'paz'|'pacto'|'alianza'|'regalo'|'tributo'|'anexion'|'guerra', amount?:number}
- *  | {type:'answer', f:number, i:number, accept:boolean}} Action
+ *  | {type:'answer', f:number, i?:number, from?:number, kind?:string, accept:boolean}} Action
+ * Opcionales en multijugador: q (número de la orden en el turno, para los dados) y x (en un ataque, dueño y
+ * tropas que se esperan en el objetivo; si han cambiado, la orden se anula).
  */
+/**
+ * Generador de dados de una orden. En multijugador (con q) sale de la semilla, el turno, el bando y q, así el
+ * resultado no depende del orden en que se aplican las órdenes de los demás jugadores.
+ * @param {Game} g @param {any} a
+ */
+function rngFor(g, a) { return a.q != null ? seedState(`eeg2:${g.seed}:${g.turn}:${a.f}:${a.q}`) : g.rng; }
 /** Error de regla con mensaje para el jugador. */
 export class RuleError extends Error {}
 /** @param {boolean} c @param {string} msg */
@@ -427,16 +442,17 @@ export function doAction(geo, g, a) {
       need(a.skill in SKILLS, 'Habilidad no válida');
       need(g.F.gold[f] >= COST.general, 'No hay oro suficiente');
       g.F.gold[f] -= COST.general;
-      const gen = hireFree(g, f, a.p, a.skill);
+      const gen = hireFree(g, f, a.p, a.skill, rngFor(g, a));
       emit(g, {t:'hire', f, p:a.p, id:gen.id});
       break;
     }
     case 'spy': return spy(geo, g, a);
     case 'diplo': return diplo(geo, g, a);
     case 'answer': {
-      const o = g.offers[a.i];
+      const i = a.from != null ? g.offers.findIndex(o => o.from === a.from && o.to === f && o.kind === a.kind) : a.i ?? -1;
+      const o = g.offers[i];
       need(!!o && o.to === f, 'Propuesta no válida');
-      g.offers.splice(a.i, 1);
+      g.offers.splice(i, 1);
       if (a.accept) acceptOffer(g, o);
       else { relAdd(g, o.from, f, -5); emit(g, {t:'reject', a:f, b:o.from, kind:o.kind}); }
       break;
@@ -459,10 +475,11 @@ function attack(geo, g, a) {
   need(P.active[to] && P.owner[to] !== f, 'No se puede atacar');
   const n = Math.floor(a.n);
   need(n >= 1 && n <= P.ready[from] && n <= P.troops[from] - 1, 'No hay tropas suficientes (al menos 1 se queda)');
-  const d = P.owner[to];
+  if (a.x) need(P.owner[to] === a.x[0] && P.troops[to] === a.x[1], 'La provincia cambió antes de tu ataque');
+  const d = P.owner[to], rng = rngFor(g, a);
   if (d !== R && g.st[f][d] !== WAR) declareWar(g, f, d, 'ataque');
   const gn = generalAt(g, from), withGen = !!(gn && gn.f === f && a.gen !== false);
-  const mA = attackMul(geo, g, f, from, to, withGen), mD = defenseMul(geo, g, to), D = P.troops[to];
+  const mA = attackMul(geo, g, f, from, to, withGen), mD = defenseMul(geo, g, to, from), D = P.troops[to];
   P.troops[from] -= n; P.ready[from] -= n;
   /** @type {{a:number[], d:number[]}[]} */
   const rolls = [];
@@ -471,7 +488,7 @@ function attack(geo, g, a) {
   if (D > 0) {
     const SA = n * mA, SD = D * mD;
     for (let i = 0; i < 200; i++) {
-      const ra = [d6(g.rng), d6(g.rng), d6(g.rng)], rd = [d6(g.rng), d6(g.rng), d6(g.rng)];
+      const ra = [d6(rng), d6(rng), d6(rng)], rd = [d6(rng), d6(rng), d6(rng)];
       rolls.push({a:ra, d:rd});
       const x = (ra[0] + ra[1] + ra[2]) * SA, y = (rd[0] + rd[1] + rd[2]) * SD;
       if (x !== y) { won = x > y; r = Math.floor(Math.min(x, y) * 100 / Math.max(x, y)); break; }
@@ -539,7 +556,7 @@ function spy(geo, g, a) {
   need(g.F.gold[f] >= price, 'No hay oro suficiente');
   if (a.kind === 'sabotear') need(!!g.P.bld[a.p], 'No tiene edificio');
   g.F.gold[f] -= price;
-  const ok = int(g.rng, 100) < spyChance(g, f);
+  const ok = int(rngFor(g, a), 100) < spyChance(g, f);
   if (ok) {
     if (a.kind === 'espiar') g.intel.push({f, p:a.p, until:g.turn + 3});
     if (a.kind === 'sabotear') g.P.bld[a.p] = '';
@@ -590,6 +607,7 @@ export function wouldAccept(geo, g, f, d, kind) {
 function diplo(geo, g, a) {
   const f = a.f, d = a.d, R = rebels(g);
   need(d !== f && d >= 0 && d < R && g.F.alive[d], 'Bando no válido');
+  need(['paz', 'pacto', 'alianza', 'regalo', 'tributo', 'anexion', 'guerra'].includes(a.kind), 'Propuesta no válida');
   const human = g.humans.includes(d);
   switch (a.kind) {
     case 'guerra': declareWar(g, f, d, 'declaración'); return;

@@ -133,3 +133,31 @@ marca del día y se puede compartir.
 Síntesis con WebAudio, sin ficheros. En paz: re menor, i–VI–III–VII, acordes suaves y un arpegio pulsado.
 En guerra: cadencia andaluza (i–VII–VI–V) con bajo y tambores. El ánimo va de 0 a 1 según las guerras
 abiertas y cambia a medio camino en cada compás. Se apaga con el sonido o con su interruptor.
+
+## Ríos y tierras libres
+
+Ocho ríos (Ebro, Duero, Tajo, Guadiana, Guadalquivir, Miño, Júcar y Segura) trazados a mano en lon/lat. Un
+ataque cruza un río si la línea entre las etiquetas de las dos provincias corta su curso: el que defiende
+suma +10 % (`RIVER_DEF`). **Rivales**: en un jugador se puede jugar contra 8, 4 o 2 bandos (elegidos con la
+semilla); el resto empieza como «Tierras libres» (el bando de los rebeldes): no atacan, no crecen más de 8
+tropas y se conquistan como cualquier provincia. **Sobrevivir**: gana el humano que siga vivo en el turno 60.
+
+## Multijugador
+
+Turnos simultáneos sobre ntfy.sh (protocolo v:2, `js/net/warroom.js`). No viaja la partida: todos los móviles
+la crean igual con la semilla y la aplican con el mismo motor.
+
+1. Sala: `hello`, `pick` (bando y bando propio), `leave`; el anfitrión publica `lobby` con la configuración
+   (escenario, dificultad de los bots, niebla, eventos, victoria, tiempo por turno) y `start` con la semilla.
+2. Turno: cada jugador da sus órdenes en su móvil (las ve al momento) y al terminar publica `orders` con la
+   lista y su huella (troceada si pasa de 3,8 KB). Cada orden lleva `q` (su número en el turno): los dados de
+   ataques, espionaje y generales salen de semilla + turno + bando + q, así no dependen del orden de los demás.
+   Un ataque lleva además `x` (dueño y tropas del objetivo al darla): si al resolver han cambiado, se anula.
+3. El anfitrión, con las órdenes de todos los vivos (o al agotarse el tiempo, o con «No esperar más»),
+   publica `resolve` con las huellas incluidas, los que se han ido (pasan a bots) y la huella del estado final.
+4. `resolveTurn` aplica las órdenes por jugador en un orden que rota cada turno, anula las que ya no valen, juega
+   los bots y el mantenimiento. Cada móvil compara su huella con la del anfitrión.
+
+Quien vuelve a la app (o entra tarde a mirar) lee lo guardado en ntfy (unas horas) y rehace la partida desde la
+semilla. Mensajes rápidos con `chat`. La clasificación del desafío diario publica `score` en un canal del día y
+se queda la mejor marca de cada jugador (`js/net/board.js`).

@@ -13,6 +13,7 @@ import {MISSIONS, unlocked, today} from '../conquest/campaign.js';
 import {medalsSheet} from './medals.js';
 import {MEDALS} from '../conquest/medals.js';
 import {starSvg} from './conquest.js';
+import {fillBoard} from './board.js';
 
 /** Arte de las losetas del menú (trazo dorado). */
 const TILE = {
@@ -53,7 +54,7 @@ export function renderMenu(world, hooks) {
     </div>
     <button class="mode glass" id="mOnline" style="--mc:rgba(127,216,232,.16)">
       <span class="art">${onlineArt([world.colors[0], world.colors[27], world.colors[40]])}</span>
-      <span><h3>Multijugador</h3><p>De 2 a 8 móviles en la misma partida, con código o QR.</p><span class="pill">${icon('wifi')}Necesita internet</span></span>
+      <span><h3>Multijugador</h3><p>De 2 a 8 móviles en la misma conquista, con turnos a la vez.</p><span class="pill">${icon('wifi')}Necesita internet</span></span>
       <span class="go">${icon('play')}</span>
     </button>
     <button class="mode glass" id="mNormal" style="--mc:rgba(88,166,255,.16)">
@@ -122,7 +123,7 @@ function briefSheet(hooks, i) {
     <button class="btn" id="bGo">${icon('swords')}Empezar la misión</button>`,
     mount:el => { /** @type {HTMLElement} */ (el.querySelector('#bGo')).onclick = () => { sound('lock'); closeSheet(); hooks.onMission(x.id); }; }});
 }
-/** Desafío diario. @param {{onDaily:()=>void}} hooks */
+/** Desafío diario con la clasificación del día. @param {{onDaily:()=>void}} hooks */
 function dailySheet(hooks) {
   const day = today(), best = S.daily.day === day && S.daily.best >= 0 ? S.daily.best : -1;
   openSheet({title:'Desafío del día', body:`
@@ -131,8 +132,20 @@ function dailySheet(hooks) {
       <div class="rowi">${icon('target')}<div class="l">Puntos<small>10 por provincia, 25 por capital, más tropas y oro</small></div></div>
       <div class="rowi">${icon('crown')}<div class="l">Tu mejor marca de hoy<small>${best >= 0 ? best + ' puntos' : 'Aún no has jugado'}</small></div></div>
     </div>
-    <button class="btn" id="dGo">${icon('swords')}Jugar el desafío</button>`,
-    mount:el => { /** @type {HTMLElement} */ (el.querySelector('#dGo')).onclick = () => { sound('lock'); closeSheet(); hooks.onDaily(); }; }});
+    <div class="glabel">Tu nombre en la tabla</div>
+    <input class="field nm" id="dName" maxlength="16" placeholder="Nombre" autocomplete="nickname" value="${esc(S.profile.name)}" aria-label="Tu nombre en la clasificación">
+    <div class="glabel">Clasificación de hoy</div>
+    <div class="grp board" id="dBoard"></div>
+    <button class="btn" id="dGo">${icon('swords')}Jugar el desafío</button>
+    <p class="note">La tabla usa el servicio público ntfy.sh: solo viajan tu nombre, el bando y los puntos.</p>`,
+    mount:el => {
+      fillBoard(/** @type {HTMLElement} */ (el.querySelector('#dBoard')), day);
+      /** @type {HTMLElement} */ (el.querySelector('#dGo')).onclick = () => {
+        const n = (/** @type {HTMLInputElement} */ (el.querySelector('#dName'))).value.trim().slice(0, 16);
+        if (n) { S.profile.name = n; save(); }
+        sound('lock'); closeSheet(); hooks.onDaily();
+      };
+    }});
 }
 /** Partidas de conquista guardadas. @param {{onLoad:(id:string)=>void}} hooks */
 function savesSheet(hooks) {

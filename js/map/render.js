@@ -5,7 +5,7 @@
 import {lighten, darken, alpha, desaturate, mix} from '../art.js';
 
 /** @typedef {{i:number, ine:string, name:string, plate:string, d:string, c:number[], label:number[], room:number, bbox:number[], area:number, adj:number[]}} Province */
-/** @typedef {{w:number, h:number, provinces:Province[], borders:Record<string,string>, outer:string[], land:string, neutral:string, pt?:any, full?:boolean}} MapData */
+/** @typedef {{w:number, h:number, provinces:Province[], borders:Record<string,string>, outer:string[], land:string, neutral:string, pt?:any, full?:boolean, rivers?:{lines:{n:string, d:string}[], cross:Record<string, string>}}} MapData */
 /** @typedef {{x:number, y:number, s:number}} Cam */
 
 const ease = (/** @type {number} */ t) => t < .5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
@@ -18,15 +18,15 @@ const M = 200;
  * tint acerca los colores de los bandos a un tono (pergamino, noche); flat quita volumen (minimalista).
  */
 const THEMES = {
-  marina:{neutral:'#15233D', neutralEdge:'rgba(140,175,230,.22)', grid:'rgba(120,170,255,.07)', shadow:'rgba(0,0,0,.65)', coast:'rgba(110,190,255,.28)', ink:'#FFFFFF', halo:'rgba(4,10,24,.8)', dim:'rgba(3,8,20,.66)', line:'rgba(6,10,22,.85)',
+  marina:{wave:'#FFFFFF', river:'rgba(120,195,255,.5)', neutral:'#15233D', neutralEdge:'rgba(140,175,230,.22)', grid:'rgba(120,170,255,.07)', shadow:'rgba(0,0,0,.65)', coast:'rgba(110,190,255,.28)', ink:'#FFFFFF', halo:'rgba(4,10,24,.8)', dim:'rgba(3,8,20,.66)', line:'rgba(6,10,22,.85)',
     empty:'#3A4560', coastLine:'rgba(230,240,255,.55)', water:.13, relief:.62, glow:1, noise:.1, tint:/** @type {[string, number]|null} */ (null), flat:false},
-  atlas:{neutral:'#D9C9A6', neutralEdge:'rgba(90,64,30,.45)', grid:'rgba(90,64,30,.12)', shadow:'rgba(70,45,15,.45)', coast:'rgba(70,110,140,.35)', ink:'#2B1E10', halo:'rgba(250,240,220,.85)', dim:'rgba(236,224,196,.62)', line:'rgba(40,25,10,.7)',
+  atlas:{wave:'#3A5A70', river:'rgba(50,105,150,.6)', neutral:'#D9C9A6', neutralEdge:'rgba(90,64,30,.45)', grid:'rgba(90,64,30,.12)', shadow:'rgba(70,45,15,.45)', coast:'rgba(70,110,140,.35)', ink:'#2B1E10', halo:'rgba(250,240,220,.85)', dim:'rgba(236,224,196,.62)', line:'rgba(40,25,10,.7)',
     empty:'#CDBF9F', coastLine:'rgba(60,40,15,.75)', water:.3, relief:.5, glow:1, noise:.1, tint:null, flat:false},
-  pergamino:{neutral:'#C9B184', neutralEdge:'rgba(80,48,18,.5)', grid:'rgba(80,48,18,.1)', shadow:'rgba(60,35,10,.5)', coast:'rgba(90,55,25,.32)', ink:'#2A1808', halo:'rgba(242,228,195,.88)', dim:'rgba(215,195,150,.62)', line:'rgba(52,28,8,.85)',
+  pergamino:{wave:'#5A3A1A', river:'rgba(45,85,115,.55)', neutral:'#C9B184', neutralEdge:'rgba(80,48,18,.5)', grid:'rgba(80,48,18,.1)', shadow:'rgba(60,35,10,.5)', coast:'rgba(90,55,25,.32)', ink:'#2A1808', halo:'rgba(242,228,195,.88)', dim:'rgba(215,195,150,.62)', line:'rgba(52,28,8,.85)',
     empty:'#BFA77C', coastLine:'rgba(58,32,10,.9)', water:.42, relief:.55, glow:.35, noise:.2, tint:['#E2CB98', .42], flat:false},
-  tactico:{neutral:'#06130D', neutralEdge:'rgba(90,255,170,.28)', grid:'rgba(90,255,170,.08)', shadow:'rgba(0,0,0,.85)', coast:'rgba(90,255,170,.22)', ink:'#D6FFE9', halo:'rgba(0,10,5,.88)', dim:'rgba(0,6,3,.72)', line:'rgba(150,255,205,.6)',
+  tactico:{wave:'#7CFFB2', river:'rgba(110,255,200,.4)', neutral:'#06130D', neutralEdge:'rgba(90,255,170,.28)', grid:'rgba(90,255,170,.08)', shadow:'rgba(0,0,0,.85)', coast:'rgba(90,255,170,.22)', ink:'#D6FFE9', halo:'rgba(0,10,5,.88)', dim:'rgba(0,6,3,.72)', line:'rgba(150,255,205,.6)',
     empty:'#0C1F17', coastLine:'rgba(120,255,190,.75)', water:.18, relief:.35, glow:1.5, noise:.05, tint:['#03140D', .52], flat:false},
-  minimal:{neutral:'#FFFFFF', neutralEdge:'rgba(30,40,60,.14)', grid:'rgba(0,0,0,0)', shadow:'rgba(30,40,60,.16)', coast:'rgba(0,0,0,0)', ink:'#1A2230', halo:'rgba(255,255,255,.92)', dim:'rgba(238,241,245,.72)', line:'rgba(255,255,255,.95)',
+  minimal:{wave:'#7C93B8', river:'rgba(110,145,190,.55)', neutral:'#FFFFFF', neutralEdge:'rgba(30,40,60,.14)', grid:'rgba(0,0,0,0)', shadow:'rgba(30,40,60,.16)', coast:'rgba(0,0,0,0)', ink:'#1A2230', halo:'rgba(255,255,255,.92)', dim:'rgba(238,241,245,.72)', line:'rgba(255,255,255,.95)',
     empty:'#DCE1E9', coastLine:'rgba(30,40,60,.3)', water:0, relief:0, glow:0, noise:0, tint:['#FFFFFF', .2], flat:true},
 };
 
@@ -58,7 +58,7 @@ export class MapView {
     /** @type {Path2D[]} */ this.paths = [];
     /** @type {Map<string, Path2D>} */ this.borderPaths = new Map();
     /** @type {Path2D[]} */ this.outerPaths = [];
-    this.land = new Path2D(); this.neutral = new Path2D();
+    this.land = new Path2D(); this.neutral = new Path2D(); this.rivers = new Path2D();
     /** @type {number[]} */ this.owner = [];
     /** @type {boolean[]} */ this.dead = [];
     /** @type {number[]} */ this.bounds = [0, 0, 1, 1];
@@ -93,6 +93,14 @@ export class MapView {
       img.src = 'data/relief.png';
     }
     /** @type {HTMLCanvasElement|null} */ this.cache = null;
+    /** Olas: dos capas de líneas de agua detrás del mapa que laten desfasadas (solo cambia su opacidad, en CSS). */
+    /** @type {HTMLCanvasElement[]} */ this.waveEls = [];
+    /** @type {HTMLCanvasElement[]} */ this.waveCache = [];
+    this.waveKey = '';
+    if (typeof document !== 'undefined' && canvas.parentElement) for (const k of ['a', 'b']) {
+      const c = document.createElement('canvas'); c.className = 'waves ' + k; c.setAttribute('aria-hidden', 'true');
+      canvas.parentElement.insertBefore(c, canvas); this.waveEls.push(c);
+    }
     this.cacheK = 1;
     this.frameTimes = /** @type {number[]} */ ([]);
     this.lastFrame = 0;
@@ -116,6 +124,7 @@ export class MapView {
     this.outerPaths = map.outer.map(d => new Path2D(d));
     this.land = new Path2D(map.land);
     this.neutral = new Path2D(map.neutral);
+    this.rivers = new Path2D((map.rivers?.lines || []).map(l => l.d).join(''));
     this.owner = map.provinces.map(p => p.i < 47 ? p.i : -1);
     this.dead = map.provinces.map(() => false);
     const xs = map.provinces.flatMap(p => [p.bbox[0], p.bbox[2]]), ys = map.provinces.flatMap(p => [p.bbox[1], p.bbox[3]]);
@@ -129,6 +138,9 @@ export class MapView {
     const r = this.canvas.getBoundingClientRect();
     this.W = r.width || innerWidth; this.H = r.height || innerHeight;
     this.canvas.width = Math.round(this.W * this.dpr); this.canvas.height = Math.round(this.H * this.dpr);
+    const wd = Math.min(this.dpr, 1.5);
+    for (const c of this.waveEls) { c.width = Math.round(this.W * wd); c.height = Math.round(this.H * wd); }
+    this.waveKey = '';
     const prev = this.cacheK;
     this.cacheK = Math.min(4096 / (this.map.w + 2 * M), 4096 / (this.map.h + 2 * M), this.fitScale() * this.dpr * 2.2);
     if (!this.cache || Math.abs(prev - this.cacheK) > .01) this.rebuild();
@@ -262,6 +274,7 @@ export class MapView {
     x.clearRect(-M, -M, m.w + 2 * M, m.h + 2 * M);
     this.paintBase(x, k);
     this.cache = c;
+    this.buildWaves(k);
     this.version = (this.version || 0) + 1;
     this.dirty = true;
   }
@@ -312,8 +325,6 @@ export class MapView {
     x.fillStyle = P.neutral; x.fill(this.neutral, 'evenodd');
     x.strokeStyle = P.neutralEdge; x.lineWidth = 1.1 * u; x.stroke(this.neutral);
     x.restore();
-    // líneas de agua alrededor de la costa (como en los mapas antiguos)
-    if (!only && P.water) this.waterlines(x, k, u);
     // sombra de la península y luz de costa
     x.save();
     x.shadowColor = P.shadow; x.shadowBlur = 26 * u * k; x.shadowOffsetY = 7 * u * k;
@@ -352,6 +363,11 @@ export class MapView {
     }
     each(p => this.rimProvince(x, p, this.provColor(p), u));
     each(p => this.glowProvince(x, p, u));
+    // ríos: línea fina con un brillo de agua, solo sobre tierra
+    x.save(); x.clip(this.land, 'evenodd'); x.lineJoin = 'round'; x.lineCap = 'round';
+    x.strokeStyle = alpha('#000000', .18); x.lineWidth = 2.6 * u; x.stroke(this.rivers);
+    x.strokeStyle = P.river; x.lineWidth = 1.5 * u; x.stroke(this.rivers);
+    x.restore();
     // líneas de frontera: finas entre provincias del mismo bando, marcadas entre bandos
     x.save(); x.lineJoin = 'round'; x.lineCap = 'round';
     for (const [key, bp] of this.borderPaths) {
@@ -367,19 +383,40 @@ export class MapView {
     x.strokeStyle = P.coastLine; x.lineWidth = 1.1 * u; x.stroke(this.land);
     x.restore();
   }
-  /** Líneas paralelas a la costa en el mar. @param {CanvasRenderingContext2D} x @param {number} k @param {number} u */
-  waterlines(x, k, u) {
-    const c = document.createElement('canvas'); c.width = x.canvas.width; c.height = x.canvas.height;
-    const l = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
-    l.setTransform(k, 0, 0, k, M * k, M * k); l.lineJoin = 'round';
-    for (const [i, d] of [[3, 23], [2, 16], [1, 10], [0, 5]]) { // de fuera adentro para no borrar las anteriores
-      l.globalAlpha = 1 - i * .2;
-      l.globalCompositeOperation = 'source-over'; l.strokeStyle = '#fff'; l.lineWidth = (d * 2 + 1.1) * u; l.stroke(this.land);
-      l.globalCompositeOperation = 'destination-out'; l.globalAlpha = 1; l.lineWidth = (d * 2 - 1.1) * u; l.stroke(this.land);
-    }
-    x.save(); x.setTransform(1, 0, 0, 1, 0, 0);
-    x.globalAlpha = this.pal().water; x.drawImage(c, 0, 0);
-    x.restore();
+  /** Las dos capas de olas (anillos alternos alrededor de la costa) en imágenes del tamaño del mapa. @param {number} k */
+  buildWaves(k) {
+    this.waveKey = '';
+    const P = this.pal(), u = 1 / this.fitScale();
+    if (!this.waveEls.length || !P.water || !this.cache) { this.waveCache = []; return; }
+    this.waveCache = [[4, 13, 22], [8.5, 17.5, 26.5]].map((rings, j) => {
+      const c = this.waveCache[j] || document.createElement('canvas');
+      c.width = /** @type {HTMLCanvasElement} */ (this.cache).width; c.height = /** @type {HTMLCanvasElement} */ (this.cache).height;
+      const l = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
+      l.setTransform(k, 0, 0, k, M * k, M * k); l.lineJoin = 'round';
+      for (let i = rings.length - 1; i >= 0; i--) { // de fuera adentro para no borrar las anteriores
+        const d = rings[i];
+        l.globalAlpha = Math.min(1, P.water * 2.4) * (1 - i * .25);
+        l.globalCompositeOperation = 'source-over'; l.strokeStyle = P.wave; l.lineWidth = (d * 2 + 1.1) * u; l.stroke(this.land);
+        l.globalCompositeOperation = 'destination-out'; l.globalAlpha = 1; l.lineWidth = (d * 2 - 1.1) * u; l.stroke(this.land);
+      }
+      return c;
+    });
+  }
+  /** Copia las olas con la cámara actual (solo si ha cambiado algo). */
+  drawWaves() {
+    if (!this.waveEls.length) return;
+    const c = this.cam, f = this.free(), wd = Math.min(this.dpr, 1.5), m = this.map;
+    const key = [c.x, c.y, c.s, f.x, f.y, f.w, f.h, this.waveCache.length, this.version].join('|');
+    if (key === this.waveKey) return;
+    this.waveKey = key;
+    const ox = f.x + f.w / 2 - c.x * c.s, oy = f.y + f.h / 2 - c.y * c.s;
+    this.waveEls.forEach((el, i) => {
+      const x = /** @type {CanvasRenderingContext2D} */ (el.getContext('2d'));
+      x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, el.width, el.height);
+      const src = this.waveCache[i]; if (!src) return;
+      x.setTransform(wd * c.s, 0, 0, wd * c.s, wd * ox, wd * oy);
+      x.drawImage(src, -M, -M, m.w + 2 * M, m.h + 2 * M);
+    });
   }
   /** @param {number} p */
   provColor(p) {
@@ -488,6 +525,7 @@ export class MapView {
       }
       x.restore();
     }
+    this.drawWaves();
     this.dirty = false;
     if (this.onCam) this.onCam(this.cam);
   }

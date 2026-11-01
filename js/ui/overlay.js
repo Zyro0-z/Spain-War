@@ -23,7 +23,7 @@ export class Overlay {
     /** @type {number[]} */ this.smokeAt = [];
     this.gArr = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-arr'})));
     this.gTok = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-tok'})));
-    /** @type {Map<number, {g:SVGGElement, bg:SVGRectElement, txt:SVGTextElement, castle:SVGPathElement, extra:SVGTextElement}>} */
+    /** @type {Map<number, {g:SVGGElement, bg:SVGRectElement, txt:SVGTextElement, castle:SVGPathElement, extra:SVGTextElement, flag:SVGGElement, cloth:SVGPathElement}>} */
     this.tokens = new Map();
     /** @type {{from:number, to:number, col:string, path:SVGPathElement, under:SVGPathElement, head:SVGPathElement, t0:number, dur:number}[]} */
     this.arrows = [];
@@ -42,9 +42,13 @@ export class Overlay {
       const shine = el('rect', {x:-15, y:-9, width:30, height:18, rx:9, fill:'url(#tkShine)'});
       const txt = /** @type {SVGTextElement} */ (el('text', {y:4.6, 'text-anchor':'middle'}));
       const extra = /** @type {SVGTextElement} */ (el('text', {x:14, y:-6, 'text-anchor':'middle', class:'tk-x'}));
-      g.append(castle, bg, shine, txt, extra);
+      // bandera ondeando sobre el castillo de la capital
+      const flag = /** @type {SVGGElement} */ (el('g', {class:'tk-flag', transform:'translate(-23 -4)'}));
+      const cloth = /** @type {SVGPathElement} */ (el('path', {d:'M0.6-13.5h9.4l-2.2 3 2.2 3H0.6Z', class:'cloth', stroke:'rgba(0,0,0,.45)', 'stroke-width':.5}));
+      flag.append(el('path', {d:'M0 0V-14', stroke:'#3D2604', 'stroke-width':1.3, 'stroke-linecap':'round'}), cloth);
+      g.append(flag, castle, bg, shine, txt, extra);
       this.gTok.appendChild(g);
-      this.tokens.set(p, {g, bg, txt, castle, extra});
+      this.tokens.set(p, {g, bg, txt, castle, extra, flag, cloth});
     }
   }
   /**
@@ -58,7 +62,8 @@ export class Overlay {
       t.bg.setAttribute('stroke', f === s.mine ? '#FFD66E' : lighten(col, .35));
       t.bg.setAttribute('stroke-width', f === s.mine ? '2' : '1.2');
       t.txt.textContent = n == null ? '?' : String(n);
-      t.castle.style.display = s.capitals.has(p) ? '' : 'none';
+      t.castle.style.display = t.flag.style.display = s.capitals.has(p) ? '' : 'none';
+      t.cloth.setAttribute('fill', col);
       t.extra.textContent = s.marks?.get(p) || '';
       t.g.style.display = f < 0 ? 'none' : '';
     }
@@ -115,6 +120,31 @@ export class Overlay {
     return new Promise(res => setTimeout(() => { this.drop(a); res(); }, a.dur));
   }
   clearArrows() { for (const a of [...this.arrows]) this.drop(a); }
+  /**
+   * Una ficha con n tropas que viaja por la curva de la flecha (mover o atacar).
+   * @param {number} from @param {number} to @param {string} col @param {number} n @param {number} dur @param {number} [stop] fracción del camino (0,5 para quedarse en la frontera)
+   * @returns {Promise<void>}
+   */
+  march(from, to, col, n, dur, stop = 1) {
+    const g = /** @type {SVGGElement} */ (el('g', {class:'tk march'}));
+    const bg = el('rect', {x:-13, y:-8, width:26, height:16, rx:8, fill:darken(col, .2), stroke:lighten(col, .45), 'stroke-width':1.2});
+    const t = el('text', {y:4.2, 'text-anchor':'middle'}); t.textContent = String(n);
+    g.append(bg, el('rect', {x:-13, y:-8, width:26, height:16, rx:8, fill:'url(#tkShine)'}), t);
+    this.gArr.appendChild(g);
+    const t0 = performance.now();
+    return new Promise(res => {
+      const step = () => {
+        const k = Math.min(1, (performance.now() - t0) / Math.max(1, dur)), e = (k < .5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2) * stop;
+        const [x0, y0] = this.anchor(from), [x1, y1] = this.anchor(to);
+        const cx = (x0 + x1) / 2 - (y1 - y0) * .22, cy = (y0 + y1) / 2 + (x1 - x0) * .22;
+        const x = (1 - e) ** 2 * x0 + 2 * (1 - e) * e * cx + e * e * x1, y = (1 - e) ** 2 * y0 + 2 * (1 - e) * e * cy + e * e * y1;
+        g.setAttribute('transform', `translate(${x.toFixed(1)} ${(y + 4).toFixed(1)})`);
+        g.style.opacity = String(k > .85 ? (1 - k) / .15 : 1);
+        if (k < 1) requestAnimationFrame(step); else { g.remove(); res(); }
+      };
+      step();
+    });
+  }
   /** @param {any} a */
   drop(a) { a.path.remove(); a.under.remove(); a.head.remove(); this.arrows = this.arrows.filter(x => x !== a); }
   /** Las flechas crecen al aparecer. */

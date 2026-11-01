@@ -11,6 +11,8 @@ Estrategia por turnos con las 47 provincias de la España peninsular: elige un b
   <img src="docs/final.jpg" width="200" alt="Final con gráfica del poder">
   <img src="docs/campana.jpg" width="200" alt="Campaña">
   <img src="docs/pergamino.jpg" width="200" alt="Tema Pergamino">
+  <img src="docs/sala.jpg" width="200" alt="Sala multijugador con QR">
+  <img src="docs/red.jpg" width="200" alt="Multijugador: esperando a los demás">
 </p>
 
 ## Instalar en el iPhone
@@ -26,17 +28,18 @@ Estrategia por turnos con las 47 provincias de la España peninsular: elige un b
 - Oro por provincia según su población; con él reclutas, construyes y haces diplomacia.
 - Diplomacia: paz, pacto de no agresión, alianza, regalos, tributo y anexión pacífica. Antes de proponer ves si aceptarán y por qué. Romper un pacto es traición: todos desconfían.
 - Dificultad: **Fácil**, todos en paz y solo pelea contigo quien atacas · **Normal**, los bots se hacen la guerra y te atacan si te ven débil o si creces mucho · **Difícil**, guerra total y coalición contra el líder.
-- Profundidad: terreno (montañas y sierras defienden mejor), suministro desde tu capital, lealtad y rebeliones en lo conquistado, edificios (fortaleza, cuartel, puerto, mercado), árbol de mejoras (logística, artillería, diplomacia, espionaje), generales con habilidades que suben de nivel, espionaje, eventos y estaciones con nieve en invierno.
-- Personalizar (plegado): bando propio con nombre y bandera hecha en el editor (diseño, colores y símbolo), rasgo del líder, tropas al empezar, oro, niebla de guerra, eventos, estaciones y tipo de victoria (dominación, capitales, diplomática o puntos).
-- Campaña de 8 misiones encadenadas con hasta 3 estrellas según los turnos, desafío del día (la misma partida para todos, 30 turnos a puntos) y tutorial interactivo.
-- Crónica en forma de periódico al empezar cada año, final con repetición del mapa turno a turno y gráfica del poder, 20 logros con medallas y música sintetizada que se vuelve tensa en guerra.
+- Profundidad: terreno (montañas y sierras defienden mejor, y cruzar uno de los grandes ríos da +10 % al que defiende), suministro desde tu capital, lealtad y rebeliones en lo conquistado, edificios (fortaleza, cuartel, puerto, mercado), árbol de mejoras (logística, artillería, diplomacia, espionaje), generales con habilidades que suben de nivel, espionaje, eventos y estaciones con nieve en invierno.
+- Personalizar (plegado): bando propio con nombre, lema, color en el mapa y bandera hecha en el editor (diseño, colores y símbolo), rasgo del líder, tropas al empezar, oro, número de rivales (el resto empieza como tierras libres), niebla de guerra, eventos, estaciones y tipo de victoria (dominación, capitales, diplomática, puntos o sobrevivir).
+- Campaña de 8 misiones encadenadas con hasta 3 estrellas según los turnos, desafío del día (la misma partida para todos, 30 turnos a puntos, con clasificación) y tutorial interactivo.
+- En el mapa: ríos, olas en la costa, nubes, banderas ondeando sobre las capitales y fichas de ejército que marchan al mover y atacar.
+- Titular de periódico en cada turno y crónica completa al empezar cada año, final con repetición del mapa turno a turno y gráfica del poder, 20 logros con medallas y música sintetizada que se vuelve tensa en guerra.
 - Las partidas se guardan solas (hasta 5) y puedes deshacer movimientos, reclutas y edificios hasta tu último ataque.
 
 Reglas completas y números en [docs/DISENO.md](docs/DISENO.md).
 
 **Espectador**: las 47 provincias luchan solas con ruleta y dados (el modo original). La semilla repite la partida exacta (`?semilla=CÓDIGO`).
 
-**Multijugador** (2 a 8 móviles, necesita internet): sala con código, enlace y QR. De momento usa el sistema de ruleta; se pasará al de conquista.
+**Multijugador** (2 a 8 móviles, necesita internet): conquista con turnos simultáneos. Sala con código, enlace y QR; el anfitrión elige escenario, dificultad de los bots, reglas y tiempo por turno, y cada uno su bando (también su bando propio). Todos dan las órdenes a la vez; cuando terminan todos (o se acaba el tiempo) el turno se resuelve igual en cada móvil. Diplomacia entre jugadores, mensajes rápidos, espectadores y vuelta a la sala si se cierra Safari.
 
 ## Accesibilidad y ajustes
 
@@ -58,17 +61,19 @@ node scripts/icons.mjs                # iconos de la app
 
 | Ruta | Contenido |
 | --- | --- |
-| `js/engine/` | Reglas puras y deterministas: generador con semilla, probabilidad exacta, partida y bots |
-| `js/net/` | Sala multijugador: transporte ntfy (y local para pruebas) y protocolo anfitrión/invitado |
+| `js/conquest/` | Motor de la conquista (puro y determinista): reglas, fin de turno e IA, escenarios, campaña, logros y partida nueva |
+| `js/engine/` | Generador con semilla, probabilidad exacta y la ruleta del modo espectador |
+| `js/net/` | Transporte ntfy (y local para pruebas), sala de la conquista con turnos simultáneos y clasificación del desafío |
 | `js/qr.js` | Código QR propio, sin librerías |
 | `js/flags.js` | Banderas de las provincias |
-| `js/map/render.js` | Mapa en canvas: imagen en memoria, cámara, atenuado, onda de conquista y nombres |
-| `js/ui/` | Menú, partida, conductores (normal, un jugador, anfitrión, invitado), sala, ruleta, dados 3D, ajustes y reloj con pausa |
+| `js/map/render.js` | Mapa en canvas: imagen en memoria, cámara, temas, relieve, ríos, olas, onda de conquista y nombres |
+| `js/ui/` | Menú, conquista, sala multijugador, preparación, editor de bandera, crónica, medallas, tutorial, espectador, dados 3D, ajustes y reloj |
+| `js/music.js` · `js/flagmaker.js` | Música sintetizada y banderas dibujadas |
 | `js/art.js` | Paleta de bandos e ilustraciones |
 | `js/icons.js` | Iconos propios en dos tonos |
 | `js/fx.js` | Sonido (WebAudio), partículas y temblor |
 | `js/store.js` | Estado guardado y migraciones |
-| `data/map.json` | Provincias, adyacencia, fronteras compartidas, costa y tierra vecina |
+| `data/map.json` | Provincias, adyacencia, fronteras compartidas, costa, tierra vecina, ríos y Portugal |
 | `scripts/` | Generación del mapa, capturas e iconos |
 | `sw.js` | Modo sin conexión |
 
@@ -78,4 +83,4 @@ Créditos y licencias en [CREDITS.md](CREDITS.md).
 
 ## Probar el multijugador sin internet
 
-Abre dos pestañas del mismo navegador con `?red=local` (la sala va por BroadcastChannel en vez de ntfy.sh). Las pruebas del protocolo (`tests/room.test.mjs`) usan un ntfy simulado: orden de mensajes, reconexión, anfitrión caído, tiempo agotado y reintentos ante 429.
+Abre dos pestañas del mismo navegador con `?red=local` (la sala va por BroadcastChannel en vez de ntfy.sh). Las pruebas del protocolo (`tests/warroom.test.mjs`) usan un ntfy simulado: varios móviles llegan al mismo estado turno a turno, órdenes que chocan, tiempo agotado, abandono, reconexión, chat, órdenes troceadas y reintentos ante 429.

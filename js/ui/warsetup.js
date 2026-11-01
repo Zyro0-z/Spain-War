@@ -13,7 +13,7 @@ import {enableGestures} from './gestures.js';
 import {flagEditor} from './flageditor.js';
 
 /** Tipos de victoria. */
-export const VICTORY = [['dominacion', 'Dominación total'], ['capitales', 'Capitales (la mitad)'], ['diplomatica', 'Diplomática'], ['puntos', 'Puntos al turno 60']];
+export const VICTORY = [['dominacion', 'Dominación total'], ['capitales', 'Capitales (la mitad)'], ['diplomatica', 'Diplomática'], ['puntos', 'Puntos al turno 60'], ['supervivencia', 'Sobrevivir 60 turnos']];
 const TROOPS = [[3, 'Pocas'], [6, 'Normal'], [10, 'Muchas']];
 const GOLD = [[75, 'Escaso'], [100, 'Normal'], [150, 'Abundante']];
 
@@ -25,8 +25,8 @@ export function showWarSetup(W, hooks) {
   const el = $('#setup'), view = W.view;
   let sc = S.war.scenario in SCENARIOS ? S.war.scenario : 'las47';
   let diff = /** @type {import('../conquest/engine.js').Difficulty} */ (S.war.diff in DIFFICULTY ? S.war.diff : 'facil');
-  const rules = {fog:false, events:true, seasons:true, victory:'dominacion', trait:'', troops:6, gold:100, ...(S.war.rules || {})};
-  const custom = {on:false, name:'', ...(S.war.custom || {}), flag:cleanFlag(S.war.custom?.flag || DEFAULT_FLAG)};
+  const rules = {fog:false, events:true, seasons:true, victory:'dominacion', trait:'', troops:6, gold:100, rivals:0, ...(S.war.rules || {})};
+  const custom = {on:false, name:'', color:'', motto:'', ...(S.war.custom || {}), flag:cleanFlag(S.war.custom?.flag || DEFAULT_FLAG)};
   const madrid = W.map.provinces.findIndex(p => p.ine === '28');
   const sc0 = S.war.center ?? -1;
   let center = sc0 >= 0 && sc0 < 47 ? sc0 : madrid;
@@ -36,7 +36,7 @@ export function showWarSetup(W, hooks) {
   let spec = scenario(mapOf(), sc, W.colors, center);
   let me = isCenter() ? 0 : Math.min(S.war.me >= 0 ? S.war.me : 0, spec.factions.length - 1);
   const owner = () => { const o = new Array(mapOf().provinces.length).fill(-1); spec.factions.forEach((f, i) => f.provinces.forEach(p => { o[p] = i; })); return o; };
-  const colors = () => spec.factions.map((f, i) => i === me && custom.on ? bannerColor(custom.flag) : f.color);
+  const colors = () => spec.factions.map((f, i) => i === me && custom.on ? custom.color || bannerColor(custom.flag) : f.color);
   const sw = (/** @type {string} */ k, /** @type {string} */ n, /** @type {string} */ sub, /** @type {boolean} */ on) => `<button class="rowi" role="switch" aria-checked="${on}" data-rule="${k}"><div class="l">${n}<small>${sub}</small></div><span class="switch"></span></button>`;
   const seg = (/** @type {string} */ k, /** @type {(number|string)[][]} */ opts, /** @type {number} */ v) => `<div class="seg" role="group" data-seg="${k}">${opts.map(([x, n]) => `<button data-v="${x}" aria-pressed="${x === v}">${n}</button>`).join('')}</div>`;
   el.hidden = false;
@@ -54,7 +54,7 @@ export function showWarSetup(W, hooks) {
       <div class="dock"><div class="panel glass su">
         <div class="chips sc" role="group" aria-label="Escenario">${Object.entries(SCENARIOS).map(([k, v]) => `<button data-sc="${k}" aria-pressed="${k === sc}">${v.name}</button>`).join('')}</div>
         <p class="hint sch">${esc(SCENARIOS[/** @type {'las47'} */ (sc)].desc)}</p>
-        <div class="pick">${fl}<div class="pn"><b>${esc(name)}</b><small>${f.provinces.length} ${f.provinces.length === 1 ? 'provincia' : 'provincias'} · ${spec.factions.length} bandos</small></div>
+        <div class="pick">${fl}<div class="pn"><b>${esc(name)}</b>${custom.on && custom.motto ? `<em class="motto-t">«${esc(custom.motto)}»</em>` : ''}<small>${f.provinces.length} ${f.provinces.length === 1 ? 'provincia' : 'provincias'} · ${spec.factions.length} bandos</small></div>
           <label class="sel"><span class="sr">${isCenter() ? 'Provincia' : 'Bando'}</span><select id="wsSel">${order.map(o => `<option value="${o.v}"${o.v === sel ? ' selected' : ''}>${esc(o.n)}</option>`).join('')}</select>${icon('chev')}</label></div>
         <div class="glabel">Dificultad</div>
         <div class="levels" role="radiogroup" aria-label="Dificultad">${Object.entries(DIFFICULTY).map(([k, v]) => `<button role="radio" data-d="${k}" aria-checked="${k === diff}"><b>${v.name}</b><small><em>${v.sub}.</em> ${v.desc}</small></button>`).join('')}</div>
@@ -64,6 +64,7 @@ export function showWarSetup(W, hooks) {
             <div class="rowi"><div class="l">Líder<small>${trait ? esc(trait.desc) : 'Un rasgo al azar'}</small></div><select id="wsTrait" aria-label="Rasgo del líder"><option value="">Al azar</option>${Object.entries(TRAITS).map(([k, v]) => `<option value="${k}"${rules.trait === k ? ' selected' : ''}>${v.name}</option>`).join('')}</select></div>
             <div class="rowi col"><div class="l">Tropas al empezar</div>${seg('troops', TROOPS, rules.troops)}</div>
             <div class="rowi col"><div class="l">Oro</div>${seg('gold', GOLD, rules.gold)}</div>
+            ${rivalOpts().length > 1 ? `<div class="rowi col"><div class="l">Rivales<small>Los demás bandos empiezan como tierras libres, sin ejército que ataque</small></div>${seg('rivals', rivalOpts(), rivalOpts().some(([v]) => v === rules.rivals) ? rules.rivals : 0)}</div>` : ''}
             ${sw('fog', 'Niebla de guerra', 'Solo ves las tropas cerca de tus fronteras', rules.fog)}
             ${sw('events', 'Eventos', 'Sequías, revueltas, fiestas, plagas…', rules.events)}
             ${sw('seasons', 'Estaciones', 'El invierno frena los ataques en la montaña', rules.seasons)}
@@ -77,7 +78,7 @@ export function showWarSetup(W, hooks) {
       sound('lock');
       S.war = {scenario:sc, me, diff, rules, center, custom};
       save(); close();
-      hooks.onStart({sc, me, diff, rules, center, custom:custom.on ? {name:custom.name, flag:custom.flag} : null});
+      hooks.onStart({sc, me, diff, rules:{...rules, rivals:rivalOpts().some(([v]) => v === rules.rivals) ? rules.rivals : 0}, center, custom:custom.on ? {name:custom.name, flag:custom.flag, color:custom.color, motto:custom.motto} : null});
     };
     /** @type {HTMLDetailsElement} */ (el.querySelector('details.adv')).ontoggle = e => { adv = /** @type {HTMLDetailsElement} */ (e.target).open; requestAnimationFrame(layout); };
     el.querySelectorAll('[data-rule]').forEach(b => /** @type {HTMLElement} */ (b).onclick = () => {
@@ -109,7 +110,9 @@ export function showWarSetup(W, hooks) {
     });
     requestAnimationFrame(layout);
   };
-  const edit = () => flagEditor({name:custom.name || spec.factions[me].name, flag:custom.flag}, v => { custom.name = v.name; custom.flag = v.flag; custom.on = true; paint(); render(); });
+  const edit = () => flagEditor({name:custom.name || spec.factions[me].name, flag:custom.flag, color:custom.color, motto:custom.motto}, v => { Object.assign(custom, v); custom.on = true; paint(); render(); });
+  /** Opciones de rivales según los bandos del escenario. */
+  const rivalOpts = () => /** @type {(number|string)[][]} */ ([[0, 'Todos'], ...[8, 4, 2].filter(n => n < spec.factions.length - 1).map(n => [n, String(n)])]);
   let lastBottom = -1;
   const layout = () => {
     const top = $('#setup .top')?.getBoundingClientRect(), dock = $('#setup .dock')?.getBoundingClientRect();

@@ -42,15 +42,20 @@ function story(n, g, pn, me) {
   }
 }
 
+/** Noticias de un periodo, de más a menos importante y sin repetir titular. @param {E.Game} g @param {number} me @param {(p:number) => string} pn @param {number} from @param {number} to */
+export function stories(g, me, pn, from, to) {
+  const items = (g.chron || []).filter(n => n.n >= from && n.n <= to).map(n => ({n, ...story(n, g, pn, me)})).filter(x => x.h);
+  items.sort((a, b) => b.w - a.w || b.n.n - a.n.n);
+  const seen = new Set();
+  return items.filter(x => !seen.has(x.h) && seen.add(x.h));
+}
 /**
  * Abre el periódico con lo sucedido entre dos turnos.
  * @param {E.Game} g @param {number} me @param {(p:number) => string} pn @param {number} from @param {number} to
  * @param {{title?:string, colors?:string[], onClose?:() => void}} [o]
  */
 export function newspaper(g, me, pn, from, to, o = {}) {
-  const items = (g.chron || []).filter(n => n.n >= from && n.n <= to).map(n => ({n, ...story(n, g, pn, me)})).filter(x => x.h);
-  items.sort((a, b) => b.w - a.w || b.n.n - a.n.n);
-  const seen = new Set(), list = items.filter(x => !seen.has(x.h) && seen.add(x.h));
+  const list = stories(g, me, pn, from, to);
   const main = list[0], rest = list.slice(1, 7);
   const c = E.counts(g.P.owner, E.rebels(g) + 1), act = g.P.active.filter(Boolean).length;
   const top = c.map((v, f) => ({f, v})).filter(x => x.v > 0 && x.f < E.rebels(g)).sort((a, b) => b.v - a.v).slice(0, 5);

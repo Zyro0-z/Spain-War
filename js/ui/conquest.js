@@ -18,10 +18,12 @@ import {borderKey} from '../map/render.js';
 import {needsPortugal} from '../conquest/scenarios.js';
 import {bannerFlag} from '../flagmaker.js';
 import {music} from '../music.js';
-import {newspaper} from './chronicle.js';
+import {newspaper, stories} from './chronicle.js';
 import {medalsFor} from '../conquest/medals.js';
 import {award} from './medals.js';
 import {MISSIONS, starsFor} from '../conquest/campaign.js';
+import {fillBoard} from './board.js';
+import {CHAT} from '../net/warroom.js';
 
 /** @typedef {import('../conquest/engine.js').Game} Game */
 /** @typedef {import('../conquest/engine.js').Geo} Geo */
@@ -32,6 +34,13 @@ import {MISSIONS, starsFor} from '../conquest/campaign.js';
  * @property {() => void} [onNew]
  * @property {(id:string) => void} [onMission] empezar otra misión de la campaña
  * @property {(kind:string) => void} [onEvent] avisos para el tutorial
+ * @property {Online} [online] partida en red
+ */
+/**
+ * @typedef {object} Online
+ * @property {import('../net/warroom.js').WarHost|import('../net/warroom.js').WarGuest} peer
+ * @property {any[]} [plan] órdenes ya dadas este turno (al volver a abrir la app)
+ * @property {() => void} onLeave abandonar la partida (tu bando pasa a ser un bot)
  */
 
 const sleep = (/** @type {number} */ ms) => new Promise(r => setTimeout(r, reduced() ? Math.min(ms, 60) : ms));
@@ -56,7 +65,16 @@ export class Conquest {
     /** @type {number[]} provincias con batalla reciente (humo) */ this.battles = [];
     this.overlay = new Overlay(/** @type {SVGSVGElement} */ (/** @type {unknown} */ ($('#ov'))), this.view);
     this.offGestures = () => {};
+    /** Partida en red: órdenes del turno, si ya se han enviado y cierres de turno por animar. */
+    this.online = hooks.online || null;
+    /** @type {any[]} */ this.plan = this.online?.plan ? [...this.online.plan] : [];
+    this.sent = false;
+    /** @type {{prev:Game, next:Game, ev:any[]}[]} */ this.inbox = [];
+    /** Mirando (espectador o bando eliminado en una partida en red). */
+    this.watching = me < 0;
   }
+  /** Nombre del jugador que lleva un bando en red ('' si es un bot). @param {number} f */
+  playerName(f) { const p = this.online?.peer.players.find(x => x.f === f && !x.left); return p && f !== this.me && this.g.humans.includes(f) ? p.name : ''; }
   /** @param {number} f */
   name(f) { return f === this.me ? 'Tú' : f >= 0 ? this.g.F.name[f] : 'Sin dueño'; }
   /** @param {number} f */
@@ -96,6 +114,7 @@ export class Conquest {
   /** Música según las guerras abiertas. */
   mood() {
     const g = this.g, me = this.me, R = E.rebels(g);
+    if (me < 0) { music.mood(.3); return; }
     let wars = 0; for (let f = 0; f < R; f++) if (f !== me && g.F.alive[f] && g.st[me][f] === E.WAR) wars++;
     music.mood(wars ? Math.min(1, .55 + wars * .12) : this.battles.length ? .3 : 0);
   }
@@ -143,7 +162,7 @@ export class Conquest {
     for (const [key, d] of Object.entries(this.map.borders)) {
       const [a, b] = key.split('-').map(Number), oa = g.P.owner[a], ob = g.P.owner[b];
       if (oa < 0 || ob < 0 || oa === ob) continue;
-      const other = oa === this.me ? ob : ob === this.me ? oa : -1;
+      const other = this.me < 0 ? -1 : oa === this.me ? ob : ob === this.me ? oa : -1;
       if (other >= 0 && (other === E.rebels(g) || g.st[this.me][other] === E.WAR)) fronts.push(d);
     }
     this.overlay.fronts(fronts);
@@ -174,11 +193,12 @@ export class Conquest {
   renderBar() {
     const g = this.g, me = this.me;
     if (this.sel >= 0) return this.card(this.sel);
+    if (this.online && (this.sent || this.watching)) return this.waitBar();
     const mine = E.provincesOf(g, me), troops = mine.reduce((s, p) => s + g.P.troops[p], 0);
     $('#wBar').innerHTML = `<div class="wpanel glass idle">
       <div class="wsum">
         ${this.flagOf(me, 'md')}
-        <div class="l"><b>${esc(this.fname(me))}</b><small class="num">${mine.length} ${mine.length === 1 ? 'provincia' : 'provincias'} · ${troops} tropas · poder ${g.F.morale[me]}</small></div>
+        <div class="l"><b>${esc(this.fname(me))}</b>${g.motto?.[me] ? `<em class="motto-t">«${esc(g.motto[me])}»</em>` : ''}<small class="num">${mine.length} ${mine.length === 1 ? 'provincia' : 'provincias'} · ${troops} tropas · poder ${g.F.morale[me]}</small></div>
         ${this.undo.length ? `<button class="icb glass" id="wUndo" aria-label="Deshacer la última orden">${icon('replay')}</button>` : ''}
       </div>
       <p class="hint">Toca una provincia para ver sus opciones. Pellizca para acercar.</p>
@@ -228,7 +248,7 @@ export class Conquest {
     const g = this.g, geo = this.geo, me = this.me, o = g.P.owner[p], mine = o === me, vis = this.visibleSet().has(p);
     const sup = o >= 0 && o < E.rebels(g) ? E.supplied(geo, g, o) : [];
     const st = o >= 0 && o !== me && o < E.rebels(g) ? g.st[me][o] : -1;
-    const chip = mine ? '<span class="chip mine">Tuya</span>' : o === E.rebels(g) ? '<span class="chip war">Rebeldes</span>' : st >= 0 ? `<span class="chip ${STATUS_CLS[st]}">${E.STATUS_NAME[st]}</span>` : '';
+    const chip = mine ? '<span class="chip mine">Tuya</span>' : o === E.rebels(g) ? `<span class="chip war">${esc(g.F.name[o])}</span>` : st >= 0 ? `<span class="chip ${STATUS_CLS[st]}">${E.STATUS_NAME[st]}</span>` : '';
     const gen = E.generalAt(g, p);
     const facts = [
       `<div><span>Tropas</span><b class="num">${vis ? g.P.troops[p] : '?'}${mine && g.P.ready[p] !== g.P.troops[p] ? `<small> (${g.P.ready[p]} listas)</small>` : ''}</b></div>`,
@@ -244,7 +264,8 @@ export class Conquest {
       geo.coast[p] ? `<span class="tag2">Costa</span>` : '',
     ].filter(Boolean).join('');
     let actions = '';
-    if (mine) {
+    if (this.watching) actions = '';
+    else if (mine) {
       const canMove = E.reachable(geo, g, me, p).length > 0 && g.P.ready[p] >= 1 && g.P.troops[p] >= 2;
       const canAtt = this.attackTargets(p).length > 0 && g.P.ready[p] >= 1 && g.P.troops[p] >= 2;
       actions = `
@@ -252,7 +273,7 @@ export class Conquest {
         <button class="act" id="aMove" ${canMove ? '' : 'disabled'}>${icon('map')}<span>Mover</span></button>
         <button class="act" id="aRec">${icon('users')}<span>Reclutar</span></button>
         <button class="act" id="aBld" ${g.P.bld[p] ? 'disabled' : ''}>${icon('shield')}<span>Construir</span></button>`;
-    } else if (o >= 0) {
+    } else if (o >= 0 && !this.sent) {
       const src = this.bestSource(p);
       actions = `
         <button class="act" id="aAtt2" ${src >= 0 ? '' : 'disabled'}>${icon('swords')}<span>Atacar</span></button>
@@ -303,7 +324,7 @@ export class Conquest {
         const D = g.P.troops[to], p = n >= 1 ? (D > 0 ? E.odds(geo, g, me, from, to, n).p : 1) : 0;
         const st = g.P.owner[to] < E.rebels(g) ? g.st[me][g.P.owner[to]] : E.WAR;
         info = `<div class="pr"><span class="num big ${p >= .5 ? 'good' : 'bad'}">${pct(p)}</span><div class="pbar" style="--ca:#FF7A45;--cd:${g.F.color[g.P.owner[to]] || '#6B6F7A'}"><i style="width:${(p * 100).toFixed(1)}%"></i></div></div>
-          <p class="note">${n} contra ${D} defensores${D > 0 ? ` · ataque ×${fmt(E.attackMul(geo, g, me, from, to, withGen) / 100, 2)} · defensa ×${fmt(E.defenseMul(geo, g, to) / 100, 2)}` : ' · sin defensores'}</p>
+          <p class="note">${n} contra ${D} defensores${D > 0 ? ` · ataque ×${fmt(E.attackMul(geo, g, me, from, to, withGen) / 100, 2)} · defensa ×${fmt(E.defenseMul(geo, g, to, from) / 100, 2)}` : ' · sin defensores'}${E.riverBetween(geo, from, to) ? ` · cruzas el ${E.riverBetween(geo, from, to)} (+${E.RIVER_DEF} % para el que defiende)` : ''}</p>
           ${st !== E.WAR ? `<p class="warn">Atacar declara la guerra a ${esc(this.fname(g.P.owner[to]))}${st === E.PACT || st === E.ALLY ? ' y rompe vuestro acuerdo: todos desconfiarán de ti' : ''}.</p>` : ''}`;
       }
       $('#wBar').innerHTML = `<div class="wpanel glass amount">
@@ -326,11 +347,18 @@ export class Conquest {
   }
   /** @param {any} a */
   act(a, reversible = false) {
+    if (this.online) {
+      if (this.sent || this.watching) { toast(this.sent ? 'Ya has enviado tus órdenes' : 'Estás mirando la partida'); return null; }
+      a = {...a, q:this.plan.length};
+      if (a.type === 'attack') a.x = [this.g.P.owner[a.to], this.g.P.troops[a.to]];
+    }
     try {
       const before = this.g;
       const r = E.apply(this.geo, this.g, a);
       if (reversible) this.undo.push(before); else this.undo = [];
-      this.g = r.g; this.save();
+      this.g = r.g;
+      if (this.online) this.plan.push(a);
+      this.save();
       award(medalsFor(this.g, this.me));
       this.hooks.onEvent?.(a.type);
       return r.ev;
@@ -339,7 +367,9 @@ export class Conquest {
   doUndo() {
     const prev = this.undo.pop(); if (!prev) return;
     sound('tap');
-    this.g = prev; this.save();
+    this.g = prev;
+    if (this.online) this.plan.pop();
+    this.save();
     this.view.setOwners(this.g.P.owner); this.refresh(); this.deselect();
     toast('Orden deshecha');
   }
@@ -349,7 +379,8 @@ export class Conquest {
     if (!ev) return;
     sound('whoosh');
     this.busy = true;
-    await this.overlay.arrow(from, to, '#7FD8A0', {dur:550});
+    const dur = reduced() ? 200 : 600;
+    await Promise.all([this.overlay.arrow(from, to, '#7FD8A0', {dur}), this.overlay.march(from, to, this.g.F.color[this.me], n, dur)]);
     this.busy = false;
     this.refresh(); this.select(to);
   }
@@ -386,7 +417,7 @@ export class Conquest {
     await view.moveTo(view.frameOf([a.from, a.to], 3), reduced() ? 0 : 500);
     const arrow = this.overlay.arrow(a.from, a.to, colA, {dur:600});
     sound('whoosh');
-    await arrow;
+    await Promise.all([arrow, this.overlay.march(a.from, a.to, colA, a.n, reduced() ? 150 : 650, .55)]);
     if (!a.rolls.length) { // provincia vacía
       await view.conquer(a.to, a.f, view.borderMid(a.to, [a.from]), reduced() ? 0 : 700, false);
       view.focus([], [], 300); toast(`${this.pname(a.to)} cae sin combate`);
@@ -514,7 +545,7 @@ export class Conquest {
     list.sort((a, b) => Number(near.has(b)) - Number(near.has(a)) || Number(g.st[me][b] === E.WAR) - Number(g.st[me][a] === E.WAR) || g.rel[me][b] - g.rel[me][a]);
     openSheet({title:'Diplomacia', body:`
       <p class="note" style="margin:0 4px 10px">Primero tus vecinos. Toca un bando para proponerle algo.</p>
-      <div class="grp dlist">${list.map(f => `<button class="rowi" data-f="${f}">${this.flagOf(f)}<div class="l">${esc(g.F.name[f])}${near.has(f) ? ' <em class="you ext">Vecino</em>' : ''}<small><span class="rel"><i style="--v:${(g.rel[me][f] + 100) / 2}%"></i></span> ${g.rel[me][f]}</small></div><span class="chip ${STATUS_CLS[g.st[me][f]]}">${E.STATUS_NAME[g.st[me][f]]}</span></button>`).join('')}</div>`,
+      <div class="grp dlist">${list.map(f => `<button class="rowi" data-f="${f}">${this.flagOf(f)}<div class="l">${esc(g.F.name[f])}${this.playerName(f) ? ` <em class="you ext">${esc(this.playerName(f))}</em>` : near.has(f) ? ' <em class="you ext">Vecino</em>' : ''}<small><span class="rel"><i style="--v:${(g.rel[me][f] + 100) / 2}%"></i></span> ${g.rel[me][f]}</small></div><span class="chip ${STATUS_CLS[g.st[me][f]]}">${E.STATUS_NAME[g.st[me][f]]}</span></button>`).join('')}</div>`,
       mount:el => el.querySelectorAll('[data-f]').forEach(b => /** @type {HTMLElement} */ (b).onclick = () => { closeSheet(); setTimeout(() => this.factionSheet(+(/** @type {HTMLElement} */ (b).dataset.f || 0)), 300); })});
   }
   /** @param {number} d */
@@ -567,7 +598,7 @@ export class Conquest {
           /** @type {HTMLElement} */ (el.querySelector('#oYes')).onclick = () => { res(true); closeSheet(); };
           /** @type {HTMLElement} */ (el.querySelector('#oNo')).onclick = () => { res(false); closeSheet(); };
         }}));
-      const ev = this.act({type:'answer', f:me, i, accept:!!ans});
+      const ev = this.act({type:'answer', f:me, from:o.from, kind:o.kind, accept:!!ans});
       if (!ev) break;
       sound(ans ? 'conquer' : 'tap');
       await sleep(350);
@@ -600,12 +631,16 @@ export class Conquest {
       <div class="grp">
         <button class="rowi" id="mmNews">${icon('map')}<div class="l">Crónica<small>Lo que ha pasado en el último año</small></div></button>
         <button class="rowi" id="mmRules">${icon('info')}<div class="l">Cómo se juega</div></button>
-        <button class="rowi" id="mmExit">${icon('back')}<div class="l">Salir al menú<small>La partida queda guardada</small></div></button>
+        ${this.online ? `<button class="rowi" id="mmChat">${icon('users')}<div class="l">Mensaje rápido</div></button>` : ''}
+        <button class="rowi" id="mmExit">${icon('back')}<div class="l">Salir al menú<small>${this.online ? 'Puedes volver a la sala desde el menú' : 'La partida queda guardada'}</small></div></button>
+        ${this.online ? `<button class="rowi" id="mmLeave">${icon('close')}<div class="l">Abandonar la partida<small>${'skip' in this.online.peer ? 'Eres el anfitrión: sin ti la partida se para' : 'Tu bando pasa a ser un bot'}</small></div></button>` : ''}
       </div>`,
       mount:el => {
         /** @type {HTMLElement} */ (el.querySelector('#mmExit')).onclick = () => { closeSheet(); this.save(); this.unmount(); this.hooks.onExit(); };
         /** @type {HTMLElement} */ (el.querySelector('#mmRules')).onclick = () => { closeSheet(); setTimeout(() => this.rulesSheet(), 300); };
         /** @type {HTMLElement} */ (el.querySelector('#mmNews')).onclick = () => { closeSheet(); setTimeout(() => this.news(Math.max(1, this.g.turn - 12), this.g.turn), 300); };
+        const ch = el.querySelector('#mmChat'); if (ch) /** @type {HTMLElement} */ (ch).onclick = () => { closeSheet(); setTimeout(() => this.chatSheet(), 300); };
+        const lv = el.querySelector('#mmLeave'); if (lv) /** @type {HTMLElement} */ (lv).onclick = () => { closeSheet(); this.unmount(); this.online?.onLeave(); };
       }});
   }
   rulesSheet() {
@@ -620,6 +655,7 @@ export class Conquest {
   /* ======================= Fin de turno ======================= */
   async endTurn() {
     if (this.busy) return;
+    if (this.online) return this.submitTurn();
     sound('lock');
     this.busy = true; this.undo = [];
     this.deselect();
@@ -628,7 +664,15 @@ export class Conquest {
     this.layout();
     const before = this.g;
     const {g, ev} = endTurn(this.geo, before);
+    await this.afterResolve(before, g, ev);
+  }
+  /**
+   * Lo que pasa tras resolverse el turno (en solitario o en red): animaciones, avisos, crónica y el siguiente turno.
+   * @param {Game} before lo que veía el jugador @param {Game} g partida nueva @param {any[]} ev sucesos que hay que enseñar
+   */
+  async afterResolve(before, g, ev) {
     this.battles = [...new Set(ev.filter(e => e.t === 'attack' && e.D > 0).map(e => e.to))];
+    this.busy = true;
     await this.animateBots(before, ev);
     this.g = g; this.save();
     this.view.setOwners(g.P.owner, g.F.alive.map(a => !a));
@@ -639,18 +683,100 @@ export class Conquest {
       if (e.t === 'revolt' && (e.from === this.me || e.to === this.me)) toast(`${this.pname(e.p)} se rebela`);
       if (e.t === 'season') toast(`Llega ${E.SEASONS[e.s].toLowerCase()}`);
     }
+    for (const e of ev) if (e.t === 'cancel' && e.f === this.me) toast(`Orden anulada: ${e.why}`);
     award(medalsFor(g, this.me));
     this.mood();
     this.hooks.onEvent?.('endturn');
-    if (g.over || !g.F.alive[this.me]) return this.end();
+    if (g.over || (!this.watching && !g.F.alive[this.me])) return this.end();
     this.banner(`Turno ${g.turn} · ${E.SEASONS[E.season(g)]}`);
     this.renderBar();
+    this.ticker(g.turn - 1);
     if (g.turn > 1 && (g.turn - 1) % 12 === 0 && (g.chron || []).some(n => n.n >= g.turn - 12)) {
       await sleep(900);
       await new Promise(res => this.news(g.turn - 12, g.turn - 1, `Crónica del año ${E.year(g) - 1}`, () => res(null)));
     }
     this.afterTurnStart();
   }
+  /* ======================= En red ======================= */
+  /** Envía las órdenes del turno y espera a los demás. */
+  async submitTurn() {
+    if (this.sent || this.watching || !this.online) return;
+    sound('lock');
+    this.sent = true; this.undo = [];
+    this.deselect();
+    this.save();
+    this.online.peer.sendOrders(this.plan).catch(() => toast('Sin conexión: se reintenta al volver la red'));
+  }
+  /** Panel de espera: quién falta, mensajes rápidos y, para el anfitrión, seguir sin esperar. */
+  waitBar() {
+    const o = this.online; if (!o) return;
+    const peer = o.peer, g = this.g, wait = peer.waiting();
+    const name = (/** @type {number} */ f) => peer.players.find(p => p.f === f)?.name || g.F.name[f];
+    const isHost = 'skip' in peer, t0 = /** @type {any} */ (peer).turnAt || 0;
+    const left = peer.cfg.timer > 0 && t0 ? Math.max(0, Math.ceil((t0 + peer.cfg.timer * 1000 - Date.now()) / 1000)) : 0;
+    $('#wBar').innerHTML = `<div class="wpanel glass waitp">
+      <div class="wt">${this.watching ? 'Mirando la partida' : 'Órdenes enviadas'}<small>${wait.length ? 'Esperando a ' + wait.map(f => esc(name(f))).join(', ') : 'Cerrando el turno…'}${left ? ` · ${left} s` : ''}</small></div>
+      <div class="who2">${peer.players.filter(p => p.f >= 0).map(p => `<span class="pl${wait.includes(p.f) ? '' : ' ok'}${p.left ? ' gone' : ''}">${this.flagOf(p.f)}${esc(p.name)}</span>`).join('')}</div>
+      <div class="row2"><button class="btn sm ghost" id="wChat">${icon('users')}Mensaje</button>${isHost && wait.length ? `<button class="btn sm ghost" id="wSkip">No esperar más</button>` : ''}</div>
+    </div>`;
+    $('#wChat').onclick = () => { sound('tap'); this.chatSheet(); };
+    const sk = $('#wSkip'); if (sk) sk.onclick = () => { sound('tap'); /** @type {any} */ (peer).skip(); };
+    this.layout();
+  }
+  /** Mensajes rápidos. */
+  chatSheet() {
+    const o = this.online; if (!o) return;
+    openSheet({title:'Mensaje rápido', body:`<div class="grp">${CHAT.map((t, k) => `<button class="rowi" data-k="${k}"><div class="l">${esc(t)}</div></button>`).join('')}</div>`,
+      mount:el => el.querySelectorAll('[data-k]').forEach(b => /** @type {HTMLElement} */ (b).onclick = () => { sound('tap'); o.peer.chat(+(/** @type {HTMLElement} */ (b).dataset.k || 0)); closeSheet(); toast('Enviado'); })});
+  }
+  /** Bocadillo con el mensaje de otro jugador. @param {{f:number, name:string, text:string}} m */
+  chatIn(m) {
+    let b = /** @type {HTMLElement|null} */ ($('#war').querySelector('.bubble'));
+    if (!b) { b = document.createElement('div'); b.className = 'bubble glass'; b.setAttribute('role', 'status'); $('#war').appendChild(b); }
+    b.innerHTML = `${this.flagOf(m.f)}<div><b>${esc(m.name)}</b><span>${esc(m.text)}</span></div>`;
+    b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+    sound('tap'); announce(`${m.name}: ${m.text}`);
+    clearTimeout(this.bubT); this.bubT = setTimeout(() => b?.classList.remove('show'), 3800);
+  }
+  /** @type {any} */ bubT;
+  /** Algo cambió en la sala (alguien terminó, se fue…). */
+  roomChanged() { if ((this.sent || this.watching) && !this.busy && !this.g.over) this.waitBar(); }
+  /**
+   * Turno cerrado en la red: se anima lo de los demás y empieza el siguiente.
+   * @param {Game} prev @param {Game} next @param {any[]} ev
+   */
+  resolved(prev, next, ev) { this.inbox.push({prev, next, ev}); if (!this.draining) this.drain(); }
+  async drain() {
+    this.draining = true;
+    while (this.inbox.length) {
+      const {next, ev} = /** @type {{prev:Game, next:Game, ev:any[]}} */ (this.inbox.shift());
+      const me = this.me, mineSent = this.sent;
+      if (!mineSent && !this.watching && this.plan.length) toast('El turno se cerró sin tus órdenes');
+      const before = this.g;
+      this.plan = []; this.sent = false; this.undo = [];
+      // lo mío ya lo vio el jugador al darlo; se enseña lo de los demás y los bots
+      const show = this.inbox.length ? [] : ev.filter(e => !((e.t === 'attack' || e.t === 'move') && e.f === me && mineSent));
+      if (this.watching && me >= 0 && next.F.alive[me] === false) this.watching = true;
+      closeSheet();
+      await this.afterResolve(this.inbox.length ? next : before, next, show);
+      if (this.watching && !next.over) this.waitBar();
+    }
+    this.draining = false;
+  }
+  /** @type {boolean|undefined} */ draining;
+  /** Titular del turno, como una tira de periódico; al tocarla se abre la crónica de ese turno. @param {number} turn */
+  ticker(turn) {
+    const top = stories(this.g, this.me, p => this.pname(p), turn, turn)[0];
+    if (!top || top.w < 30) return;
+    let t = /** @type {HTMLButtonElement|null} */ ($('#war').querySelector('.ticker'));
+    if (!t) { t = document.createElement('button'); t.className = 'ticker'; $('#war').appendChild(t); }
+    t.innerHTML = `<span>La Gaceta</span><b>${esc(top.h)}</b>`;
+    t.setAttribute('aria-label', `Titular: ${top.h}. Abrir la crónica.`);
+    t.classList.remove('show'); void t.offsetWidth; t.classList.add('show');
+    t.onclick = () => { t?.classList.remove('show'); this.news(turn, turn, `Turno ${turn}`); };
+    clearTimeout(this.tickT); this.tickT = setTimeout(() => t?.classList.remove('show'), 5200);
+  }
+  /** @type {any} */ tickT;
   /** @param {number} from @param {number} to @param {string} [title] @param {() => void} [onClose] */
   news(from, to, title, onClose) {
     sound('tap');
@@ -664,7 +790,7 @@ export class Conquest {
     const flush = async () => {
       if (!batch.length) return;
       const b = batch; batch = [];
-      await Promise.all(b.map(e => this.overlay.arrow(e.from, e.to, before.F.color[e.f] || '#fff', {dur:step()})));
+      await Promise.all(b.flatMap(e => [this.overlay.arrow(e.from, e.to, before.F.color[e.f] || '#fff', {dur:step()}), this.overlay.march(e.from, e.to, before.F.color[e.f] || '#fff', e.n, step(), e.won ? 1 : .5)]));
       for (const e of b) if (e.won) owner[e.to] = e.f;
       view.setOwners(owner);
     };
@@ -698,7 +824,8 @@ export class Conquest {
   /* ======================= Final ======================= */
   end() {
     music.stop();
-    const g = this.g, me = this.me, won = g.winner === me, lost = !g.F.alive[me], tag = g.tag;
+    const g = this.g, me = this.me, won = me >= 0 && g.winner === me, lost = me >= 0 && !g.F.alive[me], tag = g.tag;
+    const watchOn = !!this.online && lost && !g.over;
     award(medalsFor(g, me));
     const v = $('#victory');
     const f = won ? me : g.winner;
@@ -718,12 +845,14 @@ export class Conquest {
       }
     }
     let shareText = '';
+    /** @type {{pts:number, f:string}|null} */ let dailyPost = null;
     if (tag?.kind === 'daily') {
       const pts = g.F.alive[me] ? E.score(g, me) : 0;
       kick = 'Desafío del día';
       if (tag.id === S.daily.day) { S.daily.best = Math.max(S.daily.best, pts); S.daily.plays++; save(); }
       award(['diario']);
-      extra = `<div class="pts"><b class="num">${pts}</b><span>puntos${S.daily.day === tag.id ? ` · tu mejor marca hoy: ${S.daily.best}` : ''}</span></div>`;
+      extra = `<div class="pts"><b class="num">${pts}</b><span>puntos${S.daily.day === tag.id ? ` · tu mejor marca hoy: ${S.daily.best}` : ''}</span></div><div class="grp board v-board" id="vBoard"></div>`;
+      dailyPost = {pts, f:g.F.name[me]};
       shareText = `España en Guerra · Desafío del ${tag.id.split('-').reverse().join('/')}: ${pts} puntos con ${g.F.name[me]}`;
     }
     if (tag?.kind === 'tutorial') { S.tutorial = true; save(); }
@@ -733,6 +862,7 @@ export class Conquest {
       <div class="v-kick">${esc(kick)}</div>
       <h2 class="v-title" id="vTitle">${won ? winTitle(g) : lost ? 'Has caído' : esc(g.F.name[f])}</h2>
       <p class="v-sub">${won ? `${esc(g.F.name[me])} se impone en ${g.turn} turnos` : lost ? `Resistes hasta el turno ${g.turn}` : 'gana la partida'}</p>
+      ${won && g.motto?.[me] ? `<p class="v-sub motto-t">«${esc(g.motto[me])}»</p>` : ''}
       ${extra}
       <div class="v-stats glass">
         <div><b class="num">${g.turn}</b><span>Turnos</span></div>
@@ -743,6 +873,7 @@ export class Conquest {
       ${this.powerChart()}
       <div class="v-btns">
         ${nextMission ? `<button class="btn" id="vNext">${icon('play')}Siguiente misión</button>` : this.hooks.onNew && !tag ? `<button class="btn" id="vNew">${icon('swords')}Otra partida</button>` : ''}
+        ${watchOn ? `<button class="btn" id="vWatch">${icon('map')}Seguir mirando</button>` : ''}
         <div class="row3">
           <button class="btn sm ghost" id="vReplay">${icon('replay')}Repetición</button>
           <button class="btn sm ghost" id="vNews">${icon('map')}Crónica</button>
@@ -751,10 +882,12 @@ export class Conquest {
         </div>
       </div></div>`;
     if (won) { sound('victory'); celebrate([g.F.color[me], '#F2C94C', '#FFFFFF']); } else sound('eliminate');
+    const vb = document.getElementById('vBoard'); if (vb && dailyPost && tag) fillBoard(vb, tag.id, {post:dailyPost});
     announce(won ? 'Victoria.' : lost ? 'Derrota.' : 'Fin de la partida.');
     const close = () => { v.hidden = true; v.innerHTML = ''; v.className = 'overlay'; this.unmount(); };
     const on = (/** @type {string} */ id, /** @type {() => void} */ fn) => { const b = document.getElementById(id); if (b) b.onclick = () => { sound('tap'); fn(); }; };
     on('vNew', () => { close(); this.hooks.onNew?.(); });
+    on('vWatch', () => { v.hidden = true; v.innerHTML = ''; v.className = 'overlay'; this.watching = true; this.sent = false; music.start(); this.mood(); this.renderBar(); });
     on('vNext', () => { close(); this.hooks.onMission?.(nextMission); });
     on('vMenu', () => { close(); this.hooks.onExit(); });
     on('vNews', () => this.news(Math.max(1, g.turn - 12), g.turn, 'Edición especial'));

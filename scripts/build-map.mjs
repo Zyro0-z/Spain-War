@@ -212,12 +212,15 @@ async function main() {
   ].filter(Boolean).join('');
   const pt = portugal(gc(/** @type {any} */ (topo.feature(wt, ptGeom))) || '', outer, land, provinces.length, 4 / kmPerUnit);
   pt.neutral = neutralNoPt;
+  const rv = rivers(p => proj(p), provinces, Object.keys(borders));
+  pt.cross = rivers(p => proj(p), [...provinces, pt.province], Object.keys(pt.borders)).cross;
+  console.log('Ríos que separan provincias:', Object.entries({...rv.cross, ...pt.cross}).map(([k, n]) => `${k} ${n}`).join(', '));
 
   const data = {
     v:1,
     w:W, h:H, kmPerUnit:r1(kmPerUnit * 100) / 100,
     credits:'Límites provinciales: © Instituto Geográfico Nacional de España (CC BY 4.0), vía es-atlas. Países vecinos: Natural Earth (dominio público), vía world-atlas.',
-    provinces, borders, outer, land, neutral, pt,
+    provinces, borders, outer, land, neutral, pt, rivers:rv,
   };
   validate(data);
   fs.mkdirSync(path.dirname(OUT), {recursive:true});
@@ -230,6 +233,37 @@ async function main() {
   console.log('Fronteras más cortas:', lengths.sort((a, b) => a[2] - b[2]).slice(0, 6).map(([a, b, k]) => `${a}–${b} ${k} km`).join(', '));
   const trev = provinces.find(p => p.ine === '09');
   console.log(`Burgos: ${trev?.parts} polígonos (incluye el Condado de Treviño)`);
+}
+
+/* ---------- Ríos ---------- */
+/** Cursos principales (lon, lat), simplificados. Cruzarlos al atacar da defensa al que se defiende. */
+const RIVERS = [
+  ['Ebro', [[-4.15, 43.03], [-3.95, 42.98], [-3.75, 42.86], [-3.4, 42.78], [-3.1, 42.72], [-2.95, 42.65], [-2.7, 42.55], [-2.45, 42.47], [-2.15, 42.35], [-1.85, 42.2], [-1.6, 42.06], [-1.3, 41.85], [-0.88, 41.66], [-0.55, 41.45], [-0.25, 41.28], [0.1, 41.3], [0.4, 41.32], [0.55, 41.15], [0.52, 40.82], [0.72, 40.72], [0.87, 40.7]]],
+  ['Duero', [[-2.86, 41.98], [-2.55, 41.85], [-2.47, 41.76], [-2.55, 41.5], [-2.85, 41.55], [-3.2, 41.6], [-3.69, 41.66], [-4.2, 41.6], [-4.7, 41.58], [-5.0, 41.52], [-5.4, 41.5], [-5.75, 41.5], [-6.1, 41.55], [-6.3, 41.45], [-6.6, 41.25], [-6.92, 41.03], [-7.3, 41.12], [-7.8, 41.15], [-8.3, 41.1], [-8.65, 41.14]]],
+  ['Tajo', [[-1.7, 40.33], [-1.95, 40.6], [-2.35, 40.68], [-2.75, 40.55], [-3.1, 40.25], [-3.6, 40.03], [-4.02, 39.86], [-4.5, 39.9], [-4.83, 39.96], [-5.3, 39.88], [-5.75, 39.8], [-6.35, 39.72], [-6.9, 39.68], [-7.35, 39.6], [-7.9, 39.47], [-8.25, 39.45], [-8.6, 39.2], [-8.95, 38.95], [-9.1, 38.75]]],
+  ['Guadiana', [[-3.75, 39.13], [-3.95, 39.05], [-4.3, 39.05], [-4.75, 39.1], [-5.3, 38.98], [-5.85, 38.95], [-6.35, 38.92], [-6.97, 38.88], [-7.2, 38.75], [-7.3, 38.45], [-7.45, 38.2], [-7.6, 37.85], [-7.65, 37.6], [-7.5, 37.4], [-7.42, 37.2]]],
+  ['Guadalquivir', [[-2.95, 37.9], [-3.3, 37.95], [-3.75, 38.0], [-4.05, 38.04], [-4.4, 37.98], [-4.78, 37.88], [-5.2, 37.75], [-5.55, 37.62], [-5.85, 37.5], [-6.0, 37.38], [-6.1, 37.15], [-6.25, 36.93], [-6.37, 36.78]]],
+  ['Miño', [[-7.6, 43.15], [-7.55, 42.95], [-7.65, 42.62], [-7.86, 42.34], [-8.1, 42.2], [-8.35, 42.08], [-8.64, 41.95], [-8.87, 41.87]]],
+  ['Júcar', [[-1.88, 40.38], [-2.13, 40.08], [-2.1, 39.75], [-2.05, 39.5], [-1.75, 39.3], [-1.35, 39.2], [-0.95, 39.18], [-0.6, 39.15], [-0.43, 39.15], [-0.23, 39.17]]],
+  ['Segura', [[-2.6, 38.1], [-2.15, 38.2], [-1.7, 38.23], [-1.4, 38.13], [-1.13, 37.98], [-0.85, 38.05], [-0.65, 38.1]]],
+];
+/** ¿Se cortan los segmentos ab y cd? */
+function cross2(a, b, c, d) {
+  const o = (p, q, r) => Math.sign((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]));
+  return o(a, b, c) !== o(a, b, d) && o(c, d, a) !== o(c, d, b);
+}
+/**
+ * Ríos proyectados y, para cada par de vecinas, el río que corta la línea entre sus etiquetas.
+ * @param {(p:[number, number]) => [number, number]|null} proj @param {{i:number, label:number[]}[]} provinces @param {string[]} keys
+ */
+function rivers(proj, provinces, keys) {
+  const lines = RIVERS.map(([n, pts]) => ({n, pts:pts.map(p => proj(p))}));
+  /** @type {Record<string, string>} */ const cross = {};
+  for (const k of keys) {
+    const [a, b] = k.split('-').map(Number), A = provinces[a].label, B = provinces[b].label;
+    for (const L of lines) for (let i = 0; i < L.pts.length - 1; i++) if (cross2(A, B, L.pts[i], L.pts[i + 1])) { cross[k] = L.n; break; }
+  }
+  return {lines:lines.map(L => ({n:L.n, d:'M' + L.pts.map(p => `${r1(p[0])},${r1(p[1])}`).join('L')})), cross};
 }
 
 /* ---------- Portugal ---------- */

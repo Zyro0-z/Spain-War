@@ -3,24 +3,22 @@
 import {S, save} from './store.js';
 import {graphOf, newGame, playRound} from './engine/game.js';
 import {newSeed, cleanSeed} from './engine/rng.js';
-import {level as toLevel} from './engine/bots.js';
 import {assignColors} from './art.js';
 import {initFlags} from './flags.js';
 import {unlockAudio, freezeFx, stepFx} from './fx.js';
 import {MapView} from './map/render.js';
 import {Match} from './ui/play.js';
-import {NormalDriver, SoloDriver} from './ui/drivers.js';
+import {NormalDriver} from './ui/drivers.js';
 import {renderMenu, hideMenu} from './ui/menu.js';
-import {showSetup} from './ui/setup.js';
 import {showWarSetup} from './ui/warsetup.js';
 import {Conquest} from './ui/conquest.js';
-import {geoOf, createGame} from './conquest/engine.js';
+import {geoOf} from './conquest/engine.js';
 import {scenario, withPortugal, needsPortugal} from './conquest/scenarios.js';
-import {bannerColor} from './flagmaker.js';
+import {newConquest} from './conquest/newgame.js';
 import {MISSIONS, daily, today} from './conquest/campaign.js';
 import {Tutor} from './ui/tutorial.js';
-import {onlineSheet, resumeOnline, onlineMatch, onlineRoom} from './ui/online.js';
-import {cleanCode} from './net/room.js';
+import {onlineSheet, resumeOnline, onlineWar, onlineRoom} from './ui/warlobby.js';
+import {cleanCode} from './net/warroom.js';
 import {$, applyLook, measureText, makeGrain} from './ui/dom.js';
 
 /** @type {import('./ui/play.js').World} */
@@ -61,14 +59,14 @@ async function boot() {
   // toques en el mapa (elegir provincia u objetivo)
   $('#map').addEventListener('click', e => W.onTap?.(e.clientX, e.clientY));
   fpsMeter();
-  /** @type {any} */ (window).__eeg = {W, get match() { return match || onlineMatch(); }, get war() { return war; }, get room() { return onlineRoom(); }, get S() { return S; }, start, solo, menu, startWar, geo:() => geo, freezeFx, stepFx, onPhase:null,
+  /** @type {any} */ (window).__eeg = {W, get match() { return match; }, get war() { return war || onlineWar(); }, get room() { return onlineRoom(); }, get S() { return S; }, start, menu, startWar, geo:() => geo, freezeFx, stepFx, onPhase:null,
     look:(/** @type {any} */ o) => { Object.assign(S.settings, o); applyLook(); onLook(); }};
 
   const seed = cleanSeed(q.get('semilla') || ''), sala = cleanCode(q.get('sala') || '');
   const keep = q.get('red') === 'local' ? '?red=local' : '';
   if (seed) { history.replaceState(null, '', location.pathname + keep); start(seed); }
   else if (sala.length === 6) { history.replaceState(null, '', location.pathname + keep); menu(); onlineSheet(W, onlineHooks(), sala); }
-  else if (S.online && S.online.data && S.online.data.phase === 'play') { hideMenu(); resumeOnline(W, onlineHooks()); }
+  else if (S.online && S.online.v === 2 && S.online.data && S.online.data.phase === 'play') { hideMenu(); resumeOnline(W, onlineHooks()); }
   else menu();
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 }
@@ -129,9 +127,9 @@ function start(seed, o = {}) {
  * @property {number} me
  * @property {import('./conquest/engine.js').Difficulty} diff
  * @property {string} [seed]
- * @property {{fog?:boolean, events?:boolean, seasons?:boolean, victory?:string, turns?:number, trait?:string, troops?:number, gold?:number}} [rules]
+ * @property {{fog?:boolean, events?:boolean, seasons?:boolean, victory?:string, turns?:number, trait?:string, troops?:number, gold?:number, rivals?:number}} [rules]
  * @property {number} [center] provincia elegida (escenarios parciales)
- * @property {{name:string, flag:import('./flagmaker.js').FlagDesign}|null} [custom] bando propio
+ * @property {{name:string, flag:import('./flagmaker.js').FlagDesign, color?:string, motto?:string}|null} [custom] bando propio
  * @property {{kind:string, id:string}} [tag] campaña, desafío diario o tutorial
  */
 function warSetup() {
@@ -163,17 +161,11 @@ function startTutorial() {
 /** @param {WarStart} o */
 function startWar(o) {
   leaveMenu();
-  const spec = scenario(needsPortugal(o.sc) ? /** @type {any} */ (W.map48) : W.map, o.sc, W.colors, o.center);
-  const nf = spec.factions.length, r = o.rules || {};
-  if (o.custom) { const f = spec.factions[o.me]; spec.factions[o.me] = {...f, name:o.custom.name || f.name, banner:o.custom.flag, color:bannerColor(o.custom.flag)}; }
-  const vt = /** @type {any} */ (r.victory || 'dominacion');
-  const victory = vt === 'capitales' ? {type:vt, n:Math.max(2, Math.ceil(nf / 2))} : vt === 'puntos' ? {type:vt, turns:r.turns || 60} : {type:vt};
-  const g = createGame(geoFor(o.sc), spec, {seed:cleanSeed(o.seed || '') || newSeed(), humans:[o.me],
-    rules:{difficulty:o.diff, fog:!!r.fog, events:r.events !== false, seasons:r.seasons !== false, victory, startTroops:r.troops || 6, incomeMul:r.gold || 100},
-    traits:r.trait ? {[o.me]:r.trait} : undefined});
+  const seed = cleanSeed(o.seed || '') || newSeed();
+  const {g, humans} = newConquest(W, {sc:o.sc, center:o.center, seed, diff:o.diff, rules:o.rules, humans:[{f:o.me, custom:o.custom || null}]});
   if (o.tag) g.tag = o.tag;
   S.stats.games++;
-  runWar(Date.now().toString(36), g, o.me);
+  runWar(Date.now().toString(36), g, humans[0]);
 }
 /** @param {string} id */
 function loadWar(id) {
@@ -194,43 +186,17 @@ function runWar(id, g, me) {
   war.mount();
 }
 
-/* ---------- Un jugador ---------- */
-function setup() {
-  leaveMenu();
-  showSetup(W, {onBack:menu, onStart:(me, lv) => solo(me, lv)});
-}
-/** @param {number} me @param {string} lv @param {string} [seed] @param {{skip?:number}} [o] */
-function solo(me, lv, seed, o = {}) {
-  leaveMenu();
-  const level = toLevel(lv), s = cleanSeed(seed || '') || newSeed();
-  let game = newGame(W.graph, s);
-  const driver = new SoloDriver(W.graph, me, level);
-  if (o.skip) for (let i = 0; i < o.skip && game.winner < 0 && game.alive[me]; i++) {
-    game = playRound(W.graph, game, (g, f, t, rng) => f === me ? t[0] : driver.bot(g, f, t, rng)).game;
-  }
-  S.stats.games++; save();
-  run(game, driver, 'solo');
-}
-function resume() {
-  const c = S.current; if (!c) return menu();
-  leaveMenu();
-  if (c.mode === 'solo' && c.me != null) run(c.game, new SoloDriver(W.graph, c.me, toLevel(c.level)), 'solo');
-  else run(c.game, new NormalDriver(W.graph), 'normal');
-}
 /** Avanza rondas sin animar (pruebas y capturas). @param {import('./engine/game.js').Game} g @param {number} n */
 function fastForward(g, n) {
   for (let i = 0; i < n && g.winner < 0; i++) g = playRound(W.graph, g).game;
   return g;
 }
-/** @param {import('./engine/game.js').Game} game @param {import('./ui/drivers.js').Driver} driver @param {'normal'|'solo'} mode */
+/** @param {import('./engine/game.js').Game} game @param {import('./ui/drivers.js').Driver} driver @param {'normal'} mode */
 function run(game, driver, mode) {
   match = new Match(W, game, driver, {
     onExit:menu,
-    onNew:seed => mode === 'solo' ? solo(driver.me, /** @type {SoloDriver} */ (driver).level, seed) : start(seed),
-    save:g => {
-      S.current = g.winner >= 0 ? null : {mode, game:g, at:Date.now(), ...(mode === 'solo' ? {me:driver.me, level:/** @type {SoloDriver} */ (driver).level} : {})};
-      save();
-    },
+    onNew:seed => start(seed),
+    save:g => { S.current = g.winner >= 0 ? null : {mode, game:g, at:Date.now()}; save(); },
   });
   match.mount();
 }

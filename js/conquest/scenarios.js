@@ -2,6 +2,7 @@
 // Escenarios del modo conquista: quién empieza con qué provincias. Los parciales (tu región, tu provincia)
 // dejan fuera de juego el resto del mapa; el de la península añade Portugal como provincia extra.
 import {COMMUNITIES, KINGDOMS} from './data.js';
+import {seedState, int} from '../engine/rng.js';
 
 /** @typedef {import('./engine.js').ScenarioSpec} ScenarioSpec */
 /** @typedef {{provinces:{i:number, ine:string, name:string, adj:number[]}[]}} MapLike */
@@ -22,7 +23,7 @@ const byIne = (map, ine) => /** @type {number} */ (map.provinces.find(p => p.ine
 
 /**
  * Mapa con Portugal como provincia 47 (solo para el escenario de la península).
- * @template {{provinces:any[], borders:Record<string, string>, outer:string[], land:string, neutral:string, pt?:any}} M
+ * @template {{provinces:any[], borders:Record<string, string>, outer:string[], land:string, neutral:string, pt?:any, rivers?:any}} M
  * @param {M} m @returns {M}
  */
 export function withPortugal(m) {
@@ -31,7 +32,8 @@ export function withPortugal(m) {
   const provinces = m.provinces.map(p => pt.province.adj.includes(p.i) ? {...p, adj:[...p.adj, n].sort((a, b) => a - b)} : p);
   provinces.push({...pt.province, i:n});
   const outer = [...m.outer.map((d, i) => pt.outer[i] ?? d), pt.outer[n] || ''];
-  return {...m, provinces, borders:{...m.borders, ...pt.borders}, outer, land:pt.land, neutral:pt.neutral, pt:undefined, full:true};
+  const rivers = m.rivers ? {...m.rivers, cross:{...m.rivers.cross, ...(pt.cross || {})}} : undefined;
+  return {...m, provinces, borders:{...m.borders, ...pt.borders}, outer, land:pt.land, neutral:pt.neutral, pt:undefined, full:true, rivers};
 }
 /** Mapa que usa un escenario. @param {string} id */
 export const needsPortugal = id => id === 'peninsula';
@@ -68,4 +70,19 @@ export function scenario(map, id, colors, center = -1) {
     return {id, center:c, factions:ps.map(p => ({name:map.provinces[p].name, flag:p, color:colors[p], provinces:[p], capital:p}))};
   }
   return {id:'las47', factions:map.provinces.filter(p => p.i < 47).map(p => ({name:p.name, flag:p.i, color:colors[p.i], provinces:[p.i], capital:p.i}))};
+}
+
+/**
+ * Menos rivales: se quedan tu bando y n más (elegidos con la semilla) y el resto empieza como tierras libres.
+ * @param {ScenarioSpec} spec @param {number} me @param {number} n @param {string} seed
+ * @returns {{spec:ScenarioSpec, me:number}}
+ */
+export function withRivals(spec, me, n, seed) {
+  if (!(n > 0) || n >= spec.factions.length - 1) return {spec, me};
+  const r = seedState('rivales:' + seed), others = spec.factions.map((_, i) => i).filter(i => i !== me);
+  for (let i = others.length - 1; i > 0; i--) { const j = int(r, i + 1); [others[i], others[j]] = [others[j], others[i]]; }
+  const keep = new Set([me, ...others.slice(0, n)]);
+  const factions = spec.factions.filter((_, i) => keep.has(i));
+  const neutral = [...(spec.neutral || []), ...spec.factions.filter((_, i) => !keep.has(i)).flatMap(f => f.provinces)];
+  return {spec:{...spec, factions, neutral}, me:factions.indexOf(spec.factions[me])};
 }

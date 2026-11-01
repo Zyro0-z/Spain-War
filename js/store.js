@@ -26,11 +26,13 @@ export const VERSION = 1;
  */
 /**
  * @typedef {object} Online sala multijugador en curso (para volver a entrar)
+ * @property {2} v
  * @property {'host'|'guest'} kind
  * @property {string} code
  * @property {number} at
- * @property {any} data estado del anfitrión o del invitado
- * @property {import('./engine/game.js').Game|null} [view] partida tal como se veía
+ * @property {any} data estado de la sala (warroom.js)
+ * @property {any[]} plan órdenes del turno ya dadas
+ * @property {boolean} sent si ya se enviaron
  */
 /**
  * @typedef {object} State
@@ -42,7 +44,7 @@ export const VERSION = 1;
  * @property {{id:string, name:string}} profile
  * @property {Online|null} online
  * @property {{me:number, level:string}} solo últimas elecciones del modo un jugador
- * @property {{scenario:string, me:number, diff:string, rules?:any, center?:number, custom?:{on:boolean, name:string, flag:any}}} war últimas elecciones del modo conquista
+ * @property {{scenario:string, me:number, diff:string, rules?:any, center?:number, custom?:{on:boolean, name:string, flag:any, color?:string, motto?:string}}} war últimas elecciones del modo conquista
  * @property {WarSave[]} saves partidas de conquista guardadas (máximo 5)
  * @property {Record<string, number>} medals logros ganados (fecha)
  * @property {Record<string, number>} campaign estrellas por misión
@@ -92,7 +94,7 @@ export function migrate(s) {
   if (st.textSize !== 'auto' && !(+st.textSize >= .8 && +st.textSize <= 1.6)) st.textSize = 'auto';
   const cur = s.current && s.current.game && Array.isArray(s.current.game.owner) ? s.current : null;
   if (cur && cur.mode !== 'solo') cur.mode = 'normal';
-  const on = s.online && s.online.code && s.online.data && Date.now() - (+s.online.at || 0) < 12 * 3600e3 ? s.online : null;
+  const on = s.online && s.online.v === 2 && s.online.code && s.online.data && Date.now() - (+s.online.at || 0) < 12 * 3600e3 ? s.online : null;
   return {
     v:VERSION, settings:st,
     stats:{...f.stats, ...(s.stats || {})},

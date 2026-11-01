@@ -14,7 +14,8 @@ import {diceRow, roll, markWin} from './dice.js';
 import {$, esc, fmt, pct, toast, openSheet, closeSheet} from './dom.js';
 import {Clock} from './clock.js';
 import {borderKey} from '../map/render.js';
-import {TURN_MS} from '../net/room.js';
+/** Tiempo para elegir objetivo en un turno humano (ms). */
+const TURN_MS = 12000;
 
 /**
  * @typedef {object} World
