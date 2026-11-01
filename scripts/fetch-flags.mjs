@@ -23,14 +23,17 @@ const iso = (/** @type {{plate:string}} */ p) => 'ES-' + (p.plate === 'OU' ? 'OR
 const COMMUNITY = {'ES-M':'ES-MD', 'ES-O':'ES-AS', 'ES-S':'ES-CB', 'ES-LO':'ES-RI', 'ES-MU':'ES-MC', 'ES-NA':'ES-NC'};
 const FREE = /public domain|^pd|cc0|cc[- ]by(-sa)?|cc-by|attribution/i;
 /** Archivos conocidos que se prueban antes que Wikidata (donde Wikidata no tiene la bandera provincial). */
+// Alicante, Castellón, A Coruña y Zamora no tienen bandera provincial en Commons: se usa la de su capital.
+// Madrid: la de la Comunidad (uniprovincial), no la provincial anterior a 1983.
 const OVERRIDE = {
-  '03':['Bandera de la provincia de Alicante.svg', 'Flag of Alicante Province.svg'],
-  '12':['Bandera de la provincia de Castellón.svg', 'Flag of the province of Castellón.svg', 'Bandera de la Provincia de Castellón.svg'],
-  '15':['Bandeira da provincia da Coruña.svg', 'Flag of the province of A Coruña.svg', 'Bandera de la provincia de La Coruña.svg'],
-  '49':['Bandera de la provincia de Zamora.svg', 'Flag of the province of Zamora.svg', 'Flag Zamora Province.svg'],
+  '03':['Flag of Alicante.svg'],
+  '12':['Flag of Castellón de la Plana.svg', 'Bandera de Castelló de la Plana.svg', 'Bandera de Castellón de la Plana.svg'],
+  '15':['Bandeira da Coruña.svg', 'Flag of A Coruña.svg', 'BanderaLaCoruna.jpg'],
+  '49':['Bandera de Zamora.svg'],
+  '28':['Flag of the Community of Madrid.svg'],
 };
 /** Nombres que delatan una bandera de otro sitio. */
-const NOT_SPAIN = /(chinchipe|ecuador|argentin|m[eé]xico|colombia|venezuela|per[uú]|chile|filipinas|philippines|bolivia|cuba|honduras|municipi|ayuntamiento|concello|ajuntament)/i;
+const NOT_SPAIN = /(mar[ií]tim|chinchipe|ecuador|argentin|m[eé]xico|colombia|venezuela|per[uú]|chile|filipinas|philippines|bolivia|cuba|honduras|municipi|ayuntamiento|concello|ajuntament)/i;
 
 const sleep = (/** @type {number} */ ms) => new Promise(r => setTimeout(r, ms));
 /**
@@ -49,6 +52,16 @@ async function get(url, as) {
 }
 /** @param {string} url */
 const json = url => get(url, 'json');
+/** Bytes de un archivo (con los mismos reintentos). @param {string} url */
+async function getBytes(url) {
+  for (let i = 0; i < 7; i++) {
+    const r = await fetch(url, {headers:{'user-agent':UA}}).catch(() => null);
+    if (r && r.ok) return r.arrayBuffer();
+    if (r && r.status !== 429 && r.status < 500) throw new Error(`${url}: ${r.status}`);
+    await sleep(1500 * 2 ** i);
+  }
+  throw new Error(`${url}: sin respuesta tras varios intentos`);
+}
 const norm = (/** @type {string} */ s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 /**
  * Si Wikidata no la tiene: busca en Commons «Bandera/Flag … provincia de NOMBRE».
@@ -76,7 +89,7 @@ const ALIAS = {'A Coruña':['Coruña', 'La Coruña', 'Corunna'], 'Castellón':['
 async function searchFlag(name) {
   const short = name.split('/')[0].trim();
   const names = [short, ...(/** @type {Record<string, string[]>} */ (ALIAS)[name] || [])];
-  const flagLike = (/** @type {string} */ t) => /\.(svg|png)$/i.test(t) && /(flag|bandera|bandeira|bandiera)/i.test(t) && !NOT_SPAIN.test(t) && !/(coat|escudo|map|mapa|locator)/i.test(t);
+  const flagLike = (/** @type {string} */ t) => /\.(svg|png)$/i.test(t) && /(flag|bandera|bandeira|bandiera)/i.test(t) && !NOT_SPAIN.test(t) && !/(coat|escudo|map|mapa|locator|mar[ií]tim)/i.test(t);
   const inCat = (await categoryFiles()).filter(t => flagLike(t) && names.some(n => norm(t).includes(norm(n))))
     .sort((a, b) => (/provinc|diputaci|deputaci/i.test(b) ? 1 : 0) - (/provinc|diputaci|deputaci/i.test(a) ? 1 : 0) || (/\.svg$/i.test(b) ? 1 : 0) - (/\.svg$/i.test(a) ? 1 : 0));
   if (inCat[0]) return inCat[0];
@@ -141,12 +154,16 @@ async function main() {
       } catch (e) { missing.push(`${p.name}: ${e}`); if (!cand) break; }
     }
     if (!info) { if (!missing.some(m => m.startsWith(p.name))) missing.push(`${p.name}: sin bandera`); continue; }
-    let svg;
-    try { svg = await get(info.url, 'text'); } catch (e) { missing.push(`${p.name}: descarga ${e}`); continue; }
+    // SVG como texto; PNG, JPG o GIF como bytes con su tipo
+    const ext = (info.url.split('?')[0].match(/\.(\w+)$/) || ['', 'svg'])[1].toLowerCase();
+    const mime = ext === 'svg' ? 'image/svg+xml' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/' + ext;
+    let data;
+    try { data = ext === 'svg' ? Buffer.from(await get(info.url, 'text')) : Buffer.from(await getBytes(info.url)); } catch (e) { missing.push(`${p.name}: descarga ${e}`); continue; }
     await sleep(700);
     // Se rasteriza a 360×240 dentro de un contenedor 3:2 (la tela de la app recorta igual en todas)
-    await page.setContent(`<body style="margin:0;background:transparent"><img id="f" src="data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}" style="width:360px;height:240px;object-fit:cover;display:block"></body>`);
+    await page.setContent(`<body style="margin:0;background:transparent"><img id="f" src="data:${mime};base64,${data.toString('base64')}" style="width:360px;height:240px;object-fit:cover;display:block"></body>`);
     await page.waitForFunction(() => /** @type {HTMLImageElement} */ (document.getElementById('f')).complete);
+    if (!await page.evaluate(() => /** @type {HTMLImageElement} */ (document.getElementById('f')).naturalWidth > 0)) { missing.push(`${p.name}: no se pudo dibujar ${file}`); continue; }
     await page.screenshot({path:path.join(OUT, `${p.ine}.png`), omitBackground:true});
     manifest[p.ine] = {file, license:info.license, artist:info.artist, source:info.page};
     console.log(p.name, '→', file, '·', info.license);

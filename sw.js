@@ -1,5 +1,5 @@
 // Guarda la app para que funcione sin conexión. Sube la versión de CACHE en cada cambio publicado.
-const CACHE = 'eeg-v17';
+const CACHE = 'eeg-v18';
 const CORE = [
   './', './index.html', './manifest.webmanifest', './apple-touch-icon.png', './icon-512.png', './css/app.css', './data/map.json', './data/flags.json', './data/relief.png',
   './fonts/barlow-condensed-500.woff2', './fonts/barlow-condensed-600.woff2', './fonts/barlow-condensed-700.woff2', './fonts/barlow-condensed-800.woff2',

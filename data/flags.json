@@ -29,12 +29,6 @@
   "artist": "HansenBCN",
   "source": "https://commons.wikimedia.org/wiki/File:Flag_Cuenca_Province.svg"
  },
- "17": {
-  "file": "Bandera de la provincia de Gerona.png",
-  "license": "CC BY-SA 3.0",
-  "artist": "Realizado por Eduardo Panizo Gómez y extraído, con su consentimiento, de su página web Vexilla Hispánica, de dirección h",
-  "source": "https://commons.wikimedia.org/wiki/File:Bandera_de_la_provincia_de_Gerona.png"
- },
  "18": {
   "file": "Bandera de la provincia de Granada (España).svg",
   "license": "CC BY-SA 3.0",
@@ -94,12 +88,6 @@
   "license": "CC BY-SA 4.0",
   "artist": "Ulaidh",
   "source": "https://commons.wikimedia.org/wiki/File:Flag_of_Lugo_province.svg"
- },
- "28": {
-  "file": "Bandera de la Provincia de Madrid hasta 1983.svg",
-  "license": "CC BY-SA 4.0",
-  "artist": "HansenBCN",
-  "source": "https://commons.wikimedia.org/wiki/File:Bandera_de_la_Provincia_de_Madrid_hasta_1983.svg"
  },
  "29": {
   "file": "Flag Málaga Province.svg",
@@ -256,11 +244,5 @@
   "license": "CC BY-SA 4.0",
   "artist": "HansenBCN",
   "source": "https://commons.wikimedia.org/wiki/File:Flag_Burgos_Province.svg"
- },
- "03": {
-  "file": "Flag maritime alicante.svg",
-  "license": "Public domain",
-  "artist": "No machine-readable author provided. Banderas assumed (based on copyright claims).",
-  "source": "https://commons.wikimedia.org/wiki/File:Flag_maritime_alicante.svg"
  }
 }

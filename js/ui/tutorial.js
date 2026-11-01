@@ -10,7 +10,7 @@ const STEPS = [
   {on:'recruit', coach:'rec', text:'Pulsa Reclutar y compra tropas con tu oro. Cada provincia da oro según su población.'},
   {on:'attack', coach:'att', text:'Pulsa Atacar y toca una vecina. Antes de confirmar verás la probabilidad exacta de ganar.'},
   {on:'endturn', coach:'end', text:'Cuando acabes tus órdenes, pulsa Terminar turno. Después juegan los demás.'},
-  {on:'economy', coach:'gold', text:'Toca tu oro, arriba: ahí están tus ingresos y las mejoras (logística, artillería…).'},
+  {on:'economy', coach:'gold', text:'Toca tu oro, arriba: ahí están tus ingresos. La era, debajo, abre el árbol de saberes.'},
   {on:'diplomacy', coach:'dip', text:'La bandera de arriba abre la diplomacia: paz, pactos, alianzas y tributos.'},
   {on:'', coach:'', text:'Ya sabes lo básico. En Fácil nadie te ataca si no atacas tú. Conquista todas las provincias para ganar.'},
 ];
