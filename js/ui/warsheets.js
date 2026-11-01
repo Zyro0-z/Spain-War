@@ -5,6 +5,7 @@
 import * as E from '../conquest/engine.js';
 import {TERRAIN_NAME} from '../conquest/data.js';
 import {icon} from '../icons.js';
+import {buildArt} from './buildart.js';
 import {sound} from '../fx.js';
 import {esc, fmt, toast, openSheet, closeSheet} from './dom.js';
 import {BUILDING_ICON} from './overlay.js';
@@ -85,8 +86,8 @@ export function buildSheet(c, p) {
   }).sort((a, b) => Number(!!a.why) - Number(!!b.why) || b.l - a.l);
   openSheet({title:'Construir', body:`
     <p class="note" style="margin:0 4px 10px">${esc(c.pname(p))} · ${used} de ${total} huecos · tienes ${g.F.gold[f]} de oro. Mejorar un edificio no ocupa hueco nuevo.</p>
-    ${wonder && !g.P.wonder[p] ? `<div class="grp wonder-row"><button class="rowi" id="bW" ${g.F.gold[f] >= wonder.cost ? '' : 'disabled'}>${wico()}<div class="l">${esc(wonder.name)}<small>Maravilla única · ${esc(wonder.desc)}</small></div><b class="num cost">${wonder.cost}</b></button></div>` : ''}
-    <div class="grp">${rows.map(x => `<button class="rowi bl" data-b="${x.k}" ${x.ok ? '' : 'disabled'}>${bico(x.k)}<div class="l">${x.b.name} ${pips(x.l, x.b.max)}<small>${x.why ? esc(x.why) : (x.l ? 'Nivel ' + (x.l + 1) + ': ' : '') + esc(x.b.desc[Math.min(x.l, x.b.max - 1)])}</small></div>${x.why ? '' : `<b class="num cost">${x.cost}</b>`}</button>`).join('')}</div>`,
+    ${wonder && !g.P.wonder[p] ? `<div class="grp wonder-row"><button class="rowi" id="bW" ${g.F.gold[f] >= wonder.cost ? '' : 'disabled'}>${buildArt('maravilla', 'sm')}<div class="l">${esc(wonder.name)}<small>Maravilla única · ${esc(wonder.desc)}</small></div><b class="num cost">${wonder.cost}</b></button></div>` : ''}
+    <div class="grp">${rows.map(x => `<button class="rowi bl" data-b="${x.k}" ${x.ok ? '' : 'disabled'}>${buildArt(x.k, 'sm', x.l)}<div class="l">${x.b.name} ${pips(x.l, x.b.max)}<small>${x.why ? esc(x.why) : (x.l ? 'Nivel ' + (x.l + 1) + ': ' : '') + esc(x.b.desc[Math.min(x.l, x.b.max - 1)])}</small></div>${x.why ? '' : `<b class="num cost">${x.cost}</b>`}</button>`).join('')}</div>`,
     mount:el => {
       each(el, '[data-b]', b => {
         const k = /** @type {E.Building} */ (b.dataset.b);
@@ -129,7 +130,7 @@ export function spySheet(c, p) {
     let why = '';
     if (k === 'sabotear' && !E.buildingsAt(g, p).length) why = 'No tiene edificios';
     if (k === 'asesinar' && !E.generalAt(g, p)) why = 'No hay general';
-    if (k === 'robar' && (d >= E.rebels(g) || !g.F.tech[d].some((l, i) => l > g.F.tech[f][i]))) why = 'No sabe nada que tú no sepas';
+    if (k === 'robar' && (d >= E.rebels(g) || !E.stealable(g, f, d).length)) why = 'No sabe nada que tú puedas aprender';
     if (k === 'sobornar' && (g.P.loyal[p] >= 40 || g.F.capital[d] === p)) why = `Lealtad ${g.P.loyal[p]}: hace falta menos de 40`;
     return {k, v, cost, why, ok:!why && g.F.gold[f] >= cost, ch:E.spyChance(g, f, k)};
   });
@@ -227,12 +228,6 @@ export function economySheet(c) {
   c.hooks.onEvent?.('economy');
   const g = c.g, me = c.me, geo = c.geo, sup = E.supplied(geo, g, me), tr = E.treasury(geo, g, me), er = E.era(g, me);
   const rows = E.provincesOf(g, me).map(p => ({p, v:E.provinceIncome(geo, g, p, sup), gr:E.growth(geo, g, p, sup)})).sort((a, b) => b.v - a.v);
-  const sum = g.F.tech[me].reduce((a, b) => a + b, 0), next = E.ERAS[er + 1];
-  const tech = E.TECHS.map((k, i) => {
-    const lv = g.F.tech[me][i], info = E.TECH_INFO[k], cost = lv < 3 ? E.techCost(g, me, lv) : 0;
-    return `<div class="tech"><div><b>${info.name}</b><small>${lv < 3 ? 'Siguiente: ' + info.desc[lv] : 'Completa: ' + info.desc[2]}</small><div class="lv">${[0, 1, 2].map(l => `<i class="${l < lv ? 'on' : ''}"></i>`).join('')}</div></div>
-      ${lv < 3 ? `<button class="btn sm" data-t="${k}" ${g.F.gold[me] >= cost ? '' : 'disabled'}>${cost}</button>` : ''}</div>`;
-  }).join('');
   const line = (/** @type {string} */ n, /** @type {number} */ v, /** @type {string} */ sub = '') => `<div class="rowi"><div class="l">${n}${sub ? `<small>${sub}</small>` : ''}</div><b class="num ${v < 0 ? 'neg' : ''}">${v >= 0 ? '+' : '−'}${Math.abs(v)}</b></div>`;
   openSheet({title:'Tesoro', body:`
     <div class="grp ledger">
@@ -244,20 +239,78 @@ export function economySheet(c) {
       <div class="rowi total"><div class="l"><b>Por turno</b></div><b class="num ${tr.total < 0 ? 'neg' : ''}">${tr.total >= 0 ? '+' : '−'}${Math.abs(tr.total)}</b></div>
     </div>
     ${g.F.weary[me] ? `<p class="note">Cansancio de guerra ${g.F.weary[me]} %: menos oro, ataque y lealtad. Baja en paz.</p>` : ''}
-    <div class="glabel">Era · ${E.ERAS[er].name}</div>
-    <p class="note" style="margin:6px 4px 0">${esc(E.ERAS[er].desc)}${next ? ` Con ${next.at} niveles de mejora llega el ${next.name} (llevas ${sum}): ${esc(next.desc)}` : ''}</p>
-    <div class="glabel">Mejoras</div>
-    <div class="techs">${tech}</div>
+    <div class="glabel">Era y saberes</div>
+    <div class="grp"><button class="rowi" id="eSab">${glyph(SAB_ICON.libro, 'sab s4')}<div class="l">${E.ERAS[er].name} · ${g.F.know[me].length} saberes<small>Saber ${g.F.rp[me]} (+${E.saberGain(geo, g, me)} por turno). Abre el árbol de saberes.</small></div>${icon('chev')}</button></div>
     <div class="glabel">Provincias</div>
     <div class="grp">${rows.map(r => `<div class="rowi">${sico(geo.spec[r.p])}<div class="l">${esc(c.pname(r.p))}<small>${E.SPECIALTIES[/** @type {'vino'} */ (geo.spec[r.p])].name} · ${E.TAXES[g.P.tax[r.p] ?? 1].name.toLowerCase()} · ${r.gr ? '+' + r.gr + ' tropas/turno' : 'no crece'}${!sup[r.p] ? ' · sin suministro' : ''}${g.P.loyal[r.p] < 30 ? ' · poco leal' : ''}${g.P.cult[r.p] !== g.F.cult[me] ? ' · otra cultura' : ''}</small></div><b class="num">+${r.v}</b></div>`).join('')}</div>`,
-    mount:el => each(el, '[data-t]', b => {
-      const k = /** @type {E.Tech} */ (b.dataset.t);
+    mount:el => { const b = el.querySelector('#eSab'); if (b) /** @type {HTMLElement} */ (b).onclick = () => { closeSheet(); setTimeout(() => saberSheet(c), 300); }; }});
+}
+
+/* ======================= Informe de provincia ======================= */
+/**
+ * Por qué una provincia da lo que da: oro, tropas por turno, lealtad, defensa, cultura y edificios.
+ * @param {Conquest} c @param {number} p
+ */
+export function reportSheet(c, p) {
+  const g = c.g, geo = c.geo, o = g.P.owner[p], me = c.me, mine = o === me;
+  const sup = o >= 0 && o < E.rebels(g) ? E.supplied(geo, g, o) : [];
+  const block = (/** @type {string} */ title, /** @type {E.Parts} */ x, /** @type {string} */ total, /** @type {string} */ note = '') => `<div class="glabel">${title}</div>
+    <div class="grp ledger rep">${x.lines.map(([n, v]) => `<div class="rowi"><div class="l">${esc(n)}</div><b class="num ${v.startsWith('−') ? 'neg' : ''}">${esc(v)}</b></div>`).join('')}
+    <div class="rowi total"><div class="l"><b>${total.split('|')[0]}</b>${note ? `<small>${esc(note)}</small>` : ''}</div><b class="num">${total.split('|')[1]}</b></div></div>`;
+  const inc = E.incomeParts(geo, g, p, sup), gr = E.growthParts(geo, g, p, sup), loy = E.loyaltyParts(geo, g, p), def = E.defenseParts(geo, g, p);
+  const bs = E.buildingsAt(g, p);
+  openSheet({title:'Informe de ' + c.pname(p), body:`
+    <p class="note">${esc(TERRAIN_NAME[geo.terrain[p]])} · población de nivel ${geo.tier[p]} · ${E.SPECIALTIES[/** @type {'vino'} */ (geo.spec[p])].name.toLowerCase()} · cultura ${esc(g.P.cult[p])}${geo.coast[p] ? ' · costa' : ''}</p>
+    ${mine ? block('Oro por turno', inc, `Oro de la provincia|+${inc.total}`, `Luego se multiplica por ×${fmt(E.incomeMul(g, me) / 100, 2)} (líder, era, saberes, maravillas, ministros y cansancio)`) : ''}
+    ${mine ? block('Tropas por turno', gr, `Crecimiento|+${gr.total}`, `Tope ${E.cap(geo, g, p)} tropas`) : ''}
+    ${mine ? block('Lealtad', loy, `Cada turno|${loy.total >= 0 ? '+' : '−'}${Math.abs(loy.total)}`, `Ahora ${g.P.loyal[p]} de 100. Por debajo de 30 rinde la mitad; por debajo de 20 puede rebelarse.`) : ''}
+    ${block('Defensa', def, `Multiplicador|×${fmt(def.total / 100, 2)}`, 'Se aplica a cada tropa (infantería 100 %, caballería 90 %, artillería 70 %, milicia 95 %) más la postura.')}
+    ${g.P.cult[p] !== (o >= 0 ? g.F.cult[o] : g.P.cult[p]) ? `<div class="glabel">Cultura</div><div class="grp"><div class="rowi"><div class="l">Asimilando · ${g.P.assim[p]} de 24 turnos<small>Mientras tanto: −20 % de oro y −3 de lealtad por turno</small></div></div></div>` : ''}
+    ${bs.length && (mine || c.visibleSet().has(p)) ? `<div class="glabel">Edificios</div><div class="grp">${bs.map(([b, l]) => { const info = E.BUILDINGS[/** @type {E.Building} */ (b)]; return `<div class="rowi bl">${buildArt(b, 'sm', l)}<div class="l">${info.name} · nivel ${l}<small>${esc(info.desc[l - 1])}</small></div></div>`; }).join('')}</div>` : ''}`});
+}
+
+/* ======================= Saberes ======================= */
+/** Pictogramas de las ramas (caja de 16×16). */
+const SAB_ICON = {
+  camino:'M-2-6.5-5.5 6.5M2-6.5 5.5 6.5M0-5.5v2M0-1.5v2.4M0 3v3',
+  espada:'M0-7V3M-1.6-5.4 0-7 1.6-5.4V3M-3.6 3h7.2M0 3v2.6M-1.3 6.4h2.6',
+  sello:'M-5-6h10v9l-5 3.5L-5 3Z M-2-2h4M-2 1h4',
+  ojo:'M-6.5 0c3-4.6 10-4.6 13 0-3 4.6-10 4.6-13 0Z M-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0',
+  libro:'M-6.5-5h5c1.2 0 1.5 1 1.5 1v10s-.3-1-1.5-1h-5Z M6.5-5h-5C.3-5 0-4 0-4v10s.3-1 1.5-1h5Z',
+};
+const BR_ICON = [SAB_ICON.camino, SAB_ICON.espada, SAB_ICON.sello, SAB_ICON.ojo];
+/**
+ * Árbol de saberes por eras: lo aprendido, lo que se puede aprender (con saber u oro) y lo bloqueado.
+ * @param {Conquest} c
+ */
+export function saberSheet(c) {
+  c.hooks.onEvent?.('saberes');
+  const g = c.g, me = c.me, geo = c.geo, er = E.era(g, me), n = g.F.know[me].length, next = E.ERAS[er + 1];
+  const gain = E.saberGain(geo, g, me), rp = g.F.rp[me];
+  const node = (/** @type {E.Saber} */ x) => {
+    const known = E.knows(g, me, x.k), o = E.saberOpen(g, me, x.k), cost = E.saberCost(g, me, x.k), gold = E.saberGold(g, me, x.k);
+    const st = known ? 'known' : o.ok ? 'open' : 'lock', canPay = o.ok && g.F.gold[me] >= gold;
+    const turns = o.ok && rp < cost ? Math.ceil((cost - rp) / Math.max(1, gain)) : 0;
+    return `<button class="sab-n ${st}" data-k="${x.k}" ${o.ok && canPay ? '' : 'disabled'} aria-label="${esc(x.name)}">
+      ${glyph(x.br >= 0 ? BR_ICON[x.br] : SAB_ICON.libro, 'sab s' + (x.br >= 0 ? x.br : 4))}
+      <span class="t"><b>${esc(x.name)}</b><small>${esc(x.desc)}</small>
+      <em>${known ? 'Aprendido' : !o.ok ? esc(o.why) : gold ? `${cost} de saber · ahora ${gold} de oro${turns ? ` o en ${turns} t` : ''}` : `${cost} de saber · ¡listo!`}</em></span>
+    </button>`;
+  };
+  openSheet({title:'Saberes', body:`
+    <div class="sab-head"><div><span>Saber</span><b class="num">${rp}</b><em class="num">+${gain} por turno</em></div>
+      <div class="sab-era"><span>${E.ERAS[er].name}</span><div class="pbar"><i style="width:${next ? Math.min(100, Math.round(n * 100 / next.at)) : 100}%"></i></div><small>${next ? `${n} de ${next.at} saberes para el ${next.name}` : 'Última era'}</small></div></div>
+    <p class="note">El saber se gana cada turno (provincias, universidades, imprenta). Lo que falte se paga a ${E.GOLD_PER_SABER} de oro por punto.</p>
+    ${E.ERAS.map((era, i) => `<div class="glabel">${era.name}${i > er ? ` · con ${era.at} saberes` : ''}</div><p class="note era-d">${esc(era.desc)}</p>
+      <div class="sab-g">${E.SABERES.filter(x => x.era === i).map(node).join('')}</div>`).join('')}`,
+    mount:el => each(el, '[data-k]', b => {
+      const k = b.dataset.k || '', x = E.SABER[k];
       if (c.act({type:'research', f:me, k}, true)) {
         sound('conquer'); closeSheet(); c.refresh();
-        const lv = c.g.F.tech[me][E.TECHS.indexOf(k)], cap = c.g.F.capital[me];
-        if (cap >= 0) c.feedback(cap, `${E.TECH_INFO[k].name} ${lv}`, 'info', true);
+        const cap = c.g.F.capital[me];
+        if (cap >= 0) c.feedback(cap, x.name, 'info', true);
         const nowEra = E.era(c.g, me);
-        c.banner(nowEra > er ? `¡Llega el ${E.ERAS[nowEra].name}!` : `${E.TECH_INFO[k].name} · nivel ${lv}: ${E.TECH_INFO[k].desc[lv - 1]}`);
+        c.banner(nowEra > er ? `¡Llega el ${E.ERAS[nowEra].name}!` : `${x.name}: ${x.desc}`);
       }
     })});
 }
@@ -366,7 +419,7 @@ export function skillSheet(c, gen) {
 export function provinceDetail(c, p, vis) {
   const g = c.g, geo = c.geo, o = g.P.owner[p], me = c.me;
   const bs = E.buildingsAt(g, p), total = E.slots(geo, g, p);
-  const slots = vis ? `<div class="slots" aria-label="Edificios">${bs.map(([b, l]) => `<span class="slot" title="${E.BUILDINGS[/** @type {E.Building} */ (b)].name} ${l}">${bico(b)}${pips(l, E.BUILDINGS[/** @type {E.Building} */ (b)].max)}</span>`).join('')}${Array.from({length:Math.max(0, total - bs.length)}, () => '<span class="slot empty"></span>').join('')}</div>` : '';
+  const slots = vis ? `<div class="slots" aria-label="Edificios">${bs.map(([b, l]) => `<span class="slot" title="${E.BUILDINGS[/** @type {E.Building} */ (b)].name} ${l}">${buildArt(b, 'slot', l)}${pips(l, E.BUILDINGS[/** @type {E.Building} */ (b)].max)}</span>`).join('')}${Array.from({length:Math.max(0, total - bs.length)}, () => '<span class="slot empty"></span>').join('')}</div>` : '';
   const known = o === me || g.intel.some(i => i.f === me && i.p === p) || E.provincesOf(g, me).some(q => E.lvl(g, q, 'torre') > 0 && (q === p || geo.adj[q].includes(p) || geo.adj[q].some(r => geo.adj[r].includes(p))));
   const u = g.P.u[p];
   const chips = [

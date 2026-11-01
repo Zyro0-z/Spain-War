@@ -119,7 +119,7 @@ test('diplomacia v3: embargo, vasallaje rechazado al débil', () => {
 
 test('flota: astillero en Valencia con el Renacimiento', () => {
   let g = E.createGame(geo, scenario(map, 'las47', colors), {seed:'F', humans:[VA], rules:{difficulty:'facil', events:false}});
-  g.F.gold[VA] = 1000; g.F.tech[VA] = [2, 2, 0, 0];
+  g.F.gold[VA] = 1000; g.F.know[VA] = ['calzadas', 'herreria', 'cancilleria', 'correos', 'gremios'];
   assert.equal(E.era(g, VA), 1);
   g = act(g, {type:'build', f:VA, p:VA, b:'astillero'});
   g = act(g, {type:'ships', f:VA, p:VA, n:2});
@@ -127,15 +127,17 @@ test('flota: astillero en Valencia con el Renacimiento', () => {
   assert.throws(() => act(g, {type:'ships', f:VA, p:VA, n:1}), /trabajado/);
 });
 
-test('migración: una partida v2 pasa a v3 sin perder tropas ni edificios', () => {
+test('migración: una partida v2 pasa a v4 sin perder tropas ni edificios', () => {
   const g = game();
   const v2 = JSON.parse(JSON.stringify(g));
   v2.v = 2; v2.P.bld = v2.P.bld.map((b, p) => p === M ? 'cuartel' : '');
   for (const k of ['u', 'tax', 'stance', 'assim', 'wonder', 'cult']) delete v2.P[k];
-  for (const k of ['weary', 'ships', 'lord', 'cult', 'min']) delete v2.F[k];
+  for (const k of ['weary', 'ships', 'lord', 'cult', 'min', 'know', 'rp']) delete v2.F[k];
+  v2.F.tech[M] = [1, 2, 0, 0];
   for (const k of ['sieges', 'decisions', 'decSeq', 'missions', 'weds', 'embargo']) delete v2[k];
   const up = E.upgradeGame(geo, v2);
-  assert.equal(up.v, 3);
+  assert.equal(up.v, 4);
+  assert.deepEqual(up.F.know[M].sort(), ['calzadas', 'herreria', 'polvora'], 'los niveles pasan a saberes');
   assert.equal(E.lvl(up, M, 'cuartel'), 1);
   assert.deepEqual(up.P.u[M], [g.P.troops[M], 0, 0, 0]);
   assert.ok(up.F.min[M].guerra.name);
@@ -145,4 +147,35 @@ test('migración: una partida v2 pasa a v3 sin perder tropas ni edificios', () =
 test('red: cleanAction conserva tipos de tropa, táctica y desembarco', () => {
   const a = cleanAction({type:'naval', from:1, to:2, u:[3, '2', 0, -1], tac:2, x:[4, 5], q:7, evil:'x', b:{}}, 3);
   assert.deepEqual(a, {type:'naval', f:3, from:1, to:2, q:7, tac:2, x:[4, 5], u:[3, 2, 0, 0]});
+});
+
+test('saberes: requisitos, era, saber acumulado y oro', () => {
+  let g = game();
+  assert.equal(E.saberOpen(g, M, 'estribo').ok, false, 'el estribo pide herrería');
+  assert.equal(E.saberOpen(g, M, 'polvora').ok, false, 'la pólvora pide herrería y el Renacimiento');
+  g.F.rp[M] = 100; g.F.gold[M] = 0;
+  g = act(g, {type:'research', f:M, k:'herreria'});
+  assert.ok(E.knows(g, M, 'herreria'));
+  assert.equal(g.F.rp[M], 100 - E.saberCost(g, M, 'herreria'), 'se paga con saber si llega');
+  assert.throws(() => act(g, {type:'research', f:M, k:'herreria'}), /Ya lo conoces/);
+  g.F.rp[M] = 0;
+  assert.throws(() => act(g, {type:'research', f:M, k:'estribo'}), /oro/);
+  for (const k of ['calzadas', 'cancilleria', 'correos', 'gremios']) { g.F.rp[M] = 99; g = act(g, {type:'research', f:M, k}); }
+  assert.equal(E.era(g, M), 1, 'cinco saberes: Renacimiento');
+  assert.ok(E.saberOpen(g, M, 'polvora').ok);
+  const before = E.saberGain(geo, g, M);
+  g.F.rp[M] = 999; g = act(g, {type:'research', f:M, k:'imprenta'});
+  assert.equal(E.saberGain(geo, g, M), before + 3, 'la imprenta da saber');
+  const r = endTurn(geo, g).g;
+  assert.equal(r.F.rp[M], g.F.rp[M] + E.saberGain(geo, g, M), 'cada turno se suma el saber');
+});
+
+test('informe: el desglose suma lo mismo que el motor', () => {
+  const g = game(); g.P.bld[M] = {mercado:2, granja:1, fortaleza:1}; g.P.tax[M] = 2;
+  const sup = E.supplied(geo, g, M);
+  assert.equal(E.incomeParts(geo, g, M, sup).total, E.provinceIncome(geo, g, M, sup));
+  assert.ok(E.incomeParts(geo, g, M, sup).lines.some(([n]) => n === 'Mercado'));
+  assert.equal(E.growthParts(geo, g, M, sup).total, E.growth(geo, g, M, sup));
+  assert.equal(E.defenseParts(geo, g, M).total, E.defenseMul(geo, g, M));
+  assert.ok(E.loyaltyParts(geo, g, M).lines.some(([n]) => n.startsWith('Impuestos')));
 });

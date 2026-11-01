@@ -7,7 +7,7 @@ import {
   WAR, PEACE, PACT, ALLY, FED, COST, TECHS, INF, CAB, ART, MIL, BUILDINGS, DECISIONS, GEN_RETIRE, UNITS,
   clone, counts, rebels, strength, supplied, treasury, growth, cap, odds, battleOdds, autoMix, attackers, lvl, buildingsAt, slots,
   doAction, declareWar, setStatus, relAdd, emit, clamp, eliminate, encode, checkVictory, wouldAccept, generalsOf, generalAt,
-  buildCost, unitCost, techCost, shipCost, season, effectOn, provincesOf, RuleError, era, hasWonder, minister, fortified,
+  buildCost, unitCost, loyaltyParts, saberCost, saberGold, saberOpen, saberGain, knows, SABERES, shipCost, season, effectOn, provincesOf, RuleError, era, hasWonder, minister, fortified,
   addUnits, removeTroops, applyDecision, friendly, allied, seaReach, maxGenerals, upkeepOf,
 } from './engine.js';
 import {WONDERS} from './rules.js';
@@ -129,12 +129,15 @@ function aiDiplomacy(geo, g, f, diff) {
   // vasallos: el fuerte somete al vecino débil (entre bots)
   for (const x of nb) if (!g.humans.includes(x) && g.F.lord[x] < 0 && int(g.rng, 100) < 10 && wouldAccept(geo, g, f, x, 'vasallaje').ok) tryAct(geo, g, {type:'diplo', f, d:x, kind:'vasallaje'});
   // guerras de oportunidad contra vecinos débiles (en difícil, casi cada turno)
-  if (int(g.rng, 100) < (diff === 'dificil' ? 30 : 12)) {
+  // con pocos bandos o la partida avanzada, la ambición pesa más que la amistad
+  let alive = 0; for (let x = 0; x < R; x++) if (g.F.alive[x]) alive++;
+  const late = alive <= 4 || g.turn > 90;
+  if (int(g.rng, 100) < (diff === 'dificil' ? 30 : late ? 10 : 12)) {
     for (const x of nb) {
       if (g.st[f][x] !== PEACE || g.F.lord[x] === f || g.F.lord[f] === x) continue;
-      const weak = strength(g, x) * 100 < me * (diff === 'dificil' ? 90 : 60);
+      const weak = strength(g, x) * 100 < me * (diff === 'dificil' ? 90 : late ? 95 : 60);
       const big = g.humans.includes(x) && c[x] * 100 >= act * 25;
-      if ((weak || big) && g.rel[f][x] < 10) { declareWar(g, f, x, weak ? 'debil' : 'amenaza'); break; }
+      if ((weak || big) && g.rel[f][x] < (late ? 45 : 10)) { declareWar(g, f, x, weak ? 'debil' : 'amenaza'); break; }
     }
   }
   // embargo al enemigo que más le preocupa
@@ -206,9 +209,12 @@ function aiEconomy(geo, g, f, diff) {
   const gross = treasury(geo, g, f), upk = gross.upkeep;
   const canPay = (/** @type {number} */ extra) => upk + extra <= Math.max(4, Math.floor((gross.provinces + gross.trade + gross.tribute) * 60 / 100));
   // mejoras
-  if (diff !== 'facil') {
-    const order = [1, 0, 3, 2];
-    for (const k of order) { const lv = g.F.tech[f][k]; if (lv < 3 && g.F.gold[f] >= techCost(g, f, lv) + 40) { tryAct(geo, g, {type:'research', f, k:TECHS[k]}); break; } }
+  // saberes: el más barato de los que puede aprender, con preferencia por la guerra y el oro
+  {
+    const pref = ['herreria', 'calzadas', 'gremios', 'estribo', 'polvora', 'banca', 'tercios', 'imprenta', 'intendencia', 'fundicion', 'ilustracion', 'abaluartada', 'academias'];
+    const open = SABERES.filter(x => saberOpen(g, f, x.k).ok).sort((a, b) => (pref.includes(a.k) ? 0 : 1) - (pref.includes(b.k) ? 0 : 1) || a.cost - b.cost || (a.k < b.k ? -1 : 1));
+    const pick = open[0], spare = diff === 'facil' ? 220 : 120;
+    if (pick && (g.F.rp[f] >= saberCost(g, f, pick.k) || g.F.gold[f] >= saberGold(g, f, pick.k) + spare)) tryAct(geo, g, {type:'research', f, k:pick.k});
   }
   // maravilla: si tiene el sitio y le sobra el oro
   if (diff !== 'facil') for (const p of mine) {
@@ -371,6 +377,7 @@ function upkeep(geo, g) {
   for (let f = 0; f < nf; f++) {
     if (!g.F.alive[f]) continue;
     g.F.gold[f] += books[f];
+    g.F.rp[f] += saberGain(geo, g, f);
     if (g.F.gold[f] < 0) {
       g.F.gold[f] = 0;
       const ps = provincesOf(g, f).sort((a, b) => g.P.troops[b] - g.P.troops[a] || a - b).slice(0, 3);
@@ -392,10 +399,7 @@ function upkeep(geo, g) {
   for (let p = 0; p < geo.n; p++) {
     const f = g.P.owner[p]; if (f < 0 || f === R) continue;
     const foreign = g.P.cult[p] !== g.F.cult[f];
-    let up = 5 + (g.P.troops[p] >= 5 ? 5 : 0) + (g.F.trait[f] === 'guardian' ? 5 : 0) + 5 * lvl(g, p, 'catedral') + (hasWonder(g, f, 'mezquita') ? 3 : 0);
-    up += /** @type {number} */ ([4, 0, minister(g, f, 'hacienda', 'austero') ? -3 : -6][g.P.tax[p] ?? 1]);
-    up -= (foreign ? 3 : 0) + Math.floor(g.F.weary[f] / 25);
-    if (g.gens.some(x => x.f === f && x.skills.includes('carisma') && (x.p === p || geo.adj[p].includes(x.p)))) up += 10;
+    const up = loyaltyParts(geo, g, p, false).total;
     g.P.loyal[p] = clamp(g.P.loyal[p] + up, 0, 100);
     if (foreign) {
       g.P.assim[p] += hasWonder(g, f, 'mezquita') ? 2 : 1;

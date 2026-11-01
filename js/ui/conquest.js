@@ -24,7 +24,7 @@ import {award} from './medals.js';
 import {MISSIONS, starsFor} from '../conquest/campaign.js';
 import {fillBoard} from './board.js';
 import {CHAT} from '../net/warroom.js';
-import {recruitSheet, buildSheet, governSheet, spySheet, factionSheet, economySheet, govSheet, decisionSheet, skillSheet, provinceDetail, uico} from './warsheets.js';
+import {recruitSheet, buildSheet, governSheet, spySheet, factionSheet, economySheet, govSheet, decisionSheet, skillSheet, provinceDetail, uico, saberSheet, reportSheet} from './warsheets.js';
 
 /** @typedef {import('../conquest/engine.js').Game} Game */
 /** @typedef {import('../conquest/engine.js').Geo} Geo */
@@ -58,6 +58,8 @@ const BLD_ORDER = ['muralla', 'fortaleza', 'astillero', 'universidad', 'catedral
 /** @param {Game} g @param {number} p */
 /** Tipo de tropa que se ve en la ficha: artillería o caballería si son un tercio, si no la mayoría. @param {number[]} u */
 const domUnit = u => { const n = u[0] + u[1] + u[2] + u[3]; return !n ? 0 : u[2] * 3 >= n ? 2 : u[1] * 3 >= n ? 1 : u[3] > u[0] ? 3 : 0; };
+/** Edificios que ya forman parte del dibujo de la ciudad. */
+const CITY_DRAWN = ['muralla', 'catedral', 'torre', 'puerto'];
 const mainBuilding = (g, p) => E.buildingsAt(g, p).sort((a, b) => b[1] - a[1] || BLD_ORDER.indexOf(a[0]) - BLD_ORDER.indexOf(b[0]))[0]?.[0] || '';
 /** Pictograma de un edificio en su insignia. @param {string} b */
 const bico = b => `<svg class="bico" viewBox="-8 -8 16 16" aria-hidden="true"><circle r="7.6"/><path d="${BUILDING_ICON[/** @type {'puerto'} */ (b)] || ''}"/></svg>`;
@@ -180,7 +182,8 @@ export class Conquest {
       if (!g.P.active[p] || g.P.owner[p] < 0) return [];
       const see = vis.has(p), lv = see ? E.buildingsAt(g, p).reduce((a, [, l]) => a + l, 0) : 0;
       return [{p, lvl:Math.min(5, 1 + Math.floor((this.geo.tier[p] - 1) / 2) + Math.floor(lv / 3)), walls:see && E.lvl(g, p, 'muralla') > 0, church:see && E.lvl(g, p, 'catedral') > 0,
-        tower:see && E.lvl(g, p, 'torre') > 0, port:see && (E.lvl(g, p, 'puerto') > 0 || E.lvl(g, p, 'astillero') > 0), wonder:!!g.P.wonder[p]}];
+        tower:see && E.lvl(g, p, 'torre') > 0, port:see && (E.lvl(g, p, 'puerto') > 0 || E.lvl(g, p, 'astillero') > 0), wonder:!!g.P.wonder[p],
+        extra:see ? E.buildingsAt(g, p).filter(([b]) => !CITY_DRAWN.includes(b)).sort((a, b) => b[1] - a[1]).map(([b]) => b).slice(0, 4) : []}];
     }));
     this.overlay.catastrophes(g.fx.filter(x => x.until >= g.turn && g.P.active[x.p]).map(x => ({p:x.p, kind:x.kind})));
     // frentes de guerra contigo
@@ -220,7 +223,7 @@ export class Conquest {
       <div class="stat glass wturn" aria-label="Turno ${g.turn}, ${E.SEASONS[E.season(g)]} del año ${E.year(g)}"><div><span>Turno</span><b class="num">${g.turn}</b></div><i class="sepv"></i>${SEASON_ICON[E.season(g)]}<div><span>${E.SEASONS[E.season(g)]}</span><b class="num">Año ${E.year(g)}</b></div></div>
       ${me >= 0 ? `<button class="stat glass wgold" id="wGold" aria-label="Oro ${g.F.gold[me]}, más ${inc} por turno"><i class="coin" aria-hidden="true"></i><div><span>Oro</span><b class="num">${g.F.gold[me]}</b></div><em class="num ${inc < 0 ? 'neg' : ''}">${inc >= 0 ? '+' : '−'}${Math.abs(inc)}</em></button>` : ''}
       <button class="icb glass" id="wDip" aria-label="Gobierno: diplomacia, consejo y poder${wars ? `, ${wars} guerras` : ''}">${icon('crown')}${wars ? `<i class="dot num">${wars}</i>` : ''}</button>
-      <div class="subhud">${me >= 0 ? `<span class="era-chip">${E.ERAS[E.era(g, me)].name}</span>` : ''}${mis ? `<button class="mis-chip" id="wMis">${icon('target')}${esc(this.missionText(mis))} · <span class="num">${Math.max(0, mis.until - g.turn)}</span> t</button>` : ''}${me >= 0 && g.F.weary[me] >= 20 ? `<span class="era-chip bad">Cansancio ${g.F.weary[me]} %</span>` : ''}</div>`;
+      <div class="subhud">${me >= 0 ? `<button class="era-chip" id="wSab" aria-label="Saberes: ${g.F.rp[me]} de saber">${E.ERAS[E.era(g, me)].name} · <span class="num">${g.F.rp[me]}</span> saber${E.SABERES.some(x => E.saberOpen(g, me, x.k).ok && g.F.rp[me] >= E.saberCost(g, me, x.k)) ? '<i class="dot2"></i>' : ''}</button>` : ''}${mis ? `<button class="mis-chip" id="wMis">${icon('target')}${esc(this.missionText(mis))} · <span class="num">${Math.max(0, mis.until - g.turn)}</span> t</button>` : ''}${me >= 0 && g.F.weary[me] >= 20 ? `<span class="era-chip bad">Cansancio ${g.F.weary[me]} %</span>` : ''}</div>`;
     // el oro cuenta hacia el valor nuevo y deja un «−20» flotando
     const gb = /** @type {HTMLElement|null} */ ($('#wGold b'));
     if (gb && me >= 0 && this.goldShown != null && this.goldShown !== g.F.gold[me]) {
@@ -234,6 +237,7 @@ export class Conquest {
     $('#wMenu').onclick = () => { sound('tap'); this.menuSheet(); };
     $('#wDip').onclick = () => { sound('tap'); this.diplomacySheet(); };
     const wm = $('#wMis'); if (wm) wm.onclick = () => { sound('tap'); govSheet(this, 'council'); };
+    const ws = $('#wSab'); if (ws) ws.onclick = () => { sound('tap'); saberSheet(this); };
     const gold = $('#wGold'); if (gold) gold.onclick = () => { sound('tap'); this.economySheet(); };
   }
 
@@ -343,11 +347,12 @@ export class Conquest {
       <div class="ch">${this.flagOf(o, 'md')}<div class="l"><b>${esc(this.pname(p))}</b><small>${o === me ? 'Tu territorio' : esc(this.fname(o))}</small></div>${chip}<button class="icb x" id="cX" aria-label="Cerrar">${icon('close')}</button></div>
       ${det.slots}
       ${tags ? `<div class="tags">${tags}</div>` : ''}
-      <div class="facts">${facts.join('')}</div>
+      <button class="facts" id="cRep" aria-label="Informe de la provincia">${facts.join('')}<span class="rep-hint">${icon('chev')}</span></button>
       <div class="acts n${nAct}">${actions}</div>
     </div>`;
     const on = (/** @type {string} */ id, /** @type {() => void} */ fn) => { const b = document.getElementById(id); if (b) b.onclick = () => { sound('tap'); fn(); }; };
     on('cX', () => this.deselect());
+    on('cRep', () => reportSheet(this, p));
     on('aAtt', () => { this.mode = 'attack'; this.src = p; this.overlay.highlight({sel:p, enemy:this.attackTargets(p)}); this.hintBar('Toca la provincia que quieres atacar'); });
     on('aMove', () => { this.mode = 'move'; this.src = p; this.overlay.highlight({sel:p, own:E.reachable(geo, g, me, p)}); this.hintBar('Toca adónde mover las tropas'); });
     on('aRec', () => this.recruitSheet(p));

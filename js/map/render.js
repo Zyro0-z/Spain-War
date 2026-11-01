@@ -306,7 +306,7 @@ export class MapView {
     const outer = this.outerPaths[p];
     x.save(); x.clip(this.paths[p], 'evenodd'); x.lineJoin = 'round'; x.lineCap = 'round';
     x.globalCompositeOperation = 'lighter';
-    for (const [w, a] of [[6, .06], [3.2, .1], [1.6, .24]]) {
+    for (const [w, a] of [[5, .045], [2.6, .08], [1.3, .2]]) {
       x.strokeStyle = alpha(lighten(col, .5), a * boost); x.lineWidth = w * u;
       for (const k of keys) { const bp = this.borderPaths.get(k); if (bp) x.stroke(bp); }
     }
@@ -361,28 +361,40 @@ export class MapView {
       }
       x.restore();
     }
-    each(p => this.rimProvince(x, p, this.provColor(p), u));
-    each(p => this.glowProvince(x, p, u));
-    // ríos: línea fina con un brillo de agua, solo sobre tierra
+    void only;
+  }
+  /**
+   * Bordes, relieve de cada provincia, brillo entre bandos y ríos, siempre en vectorial: con zoom siguen finos y
+   * nítidos (crecen poco) y no se descuadran con la imagen en memoria. Solo se pinta lo que se ve.
+   * @param {CanvasRenderingContext2D} x @param {boolean} [full] con la cámara en marcha solo ríos y fronteras
+   */
+  drawEdges(x, full = true) {
+    const c = this.cam, z = c.s / this.fitScale(), e = Math.min(2, Math.pow(z, .35)) / c.s, P = this.pal();
+    const [vx0, vy0] = this.toMap(0, 0), [vx1, vy1] = this.toMap(this.W, this.H);
+    const seen = this.map.provinces.map(pr => { const b = pr.bbox; return b[2] >= vx0 && b[0] <= vx1 && b[3] >= vy0 && b[1] <= vy1; });
+    if (full) {
+      for (let p = 0; p < seen.length; p++) if (seen[p]) this.rimProvince(x, p, this.provColor(p), e);
+      for (let p = 0; p < seen.length; p++) if (seen[p]) this.glowProvince(x, p, e);
+    }
     x.save(); x.clip(this.land, 'evenodd'); x.lineJoin = 'round'; x.lineCap = 'round';
-    x.strokeStyle = alpha('#000000', .18); x.lineWidth = 2.6 * u; x.stroke(this.rivers);
-    x.strokeStyle = P.river; x.lineWidth = 1.5 * u; x.stroke(this.rivers);
+    x.strokeStyle = alpha('#000000', .18); x.lineWidth = 2.4 * e; x.stroke(this.rivers);
+    x.strokeStyle = P.river; x.lineWidth = 1.3 * e; x.stroke(this.rivers);
     x.restore();
-    // líneas de frontera y costa
-    this.strokeBorders(x, u, only);
+    this.strokeBorders(x, e, undefined, seen);
   }
   /**
    * Fronteras (finas y discontinuas dentro de un bando, marcadas entre bandos) y línea de costa. Se pintan en la
    * imagen en memoria y, con zoom, otra vez en vectorial encima para que sigan nítidas.
-   * @param {CanvasRenderingContext2D} x @param {number} u @param {Set<number>} [only]
+   * @param {CanvasRenderingContext2D} x @param {number} u @param {Set<number>} [only] @param {boolean[]} [seen] provincias a la vista
    */
-  strokeBorders(x, u, only) {
+  strokeBorders(x, u, only, seen) {
     const P = this.pal();
     x.save(); x.lineJoin = 'round'; x.lineCap = 'round';
     for (const [key, bp] of this.borderPaths) {
       const [a, b] = key.split('-').map(Number), same = this.owner[a] === this.owner[b];
       if (only && !only.has(a) && !only.has(b)) continue;
-      x.strokeStyle = same ? alpha(darken(this.provColor(a), .5), .55) : P.line;
+      if (seen && !seen[a] && !seen[b]) continue;
+      x.strokeStyle = same ? alpha(darken(this.provColor(a), .5), .4) : P.line;
       x.lineWidth = (same ? .9 : 1.6) * u * (this.contrast ? 1.6 : 1);
       if (same) x.setLineDash([2.4 * u, 2.2 * u]); else x.setLineDash([]);
       x.stroke(bp);
@@ -482,11 +494,11 @@ export class MapView {
     x.setTransform(1, 0, 0, 1, 0, 0);
     if (still) {
       // Cámara quieta: el fondo (mapa, atenuado, provincias activas y nombres) se pinta una vez a tamaño de pantalla
-      const key = [c.x, c.y, c.s, dim, [...this.active].join(','), this.labels, this.labelDy, this.me, this.version, this.canvas.width, this.canvas.height, this.wave ? this.wave.p : -1].join('|');
+      const key = [c.x, c.y, c.s, f.x, f.y, f.w, f.h, dim, [...this.active].join(','), this.labels, this.labelDy, this.me, this.version, this.canvas.width, this.canvas.height, this.wave ? this.wave.p : -1].join('|');
       if (key !== this.snapKey) {
         const sn = this.snap || (this.snap = document.createElement('canvas'));
         if (sn.width !== this.canvas.width || sn.height !== this.canvas.height) { sn.width = this.canvas.width; sn.height = this.canvas.height; }
-        this.renderStatic(/** @type {CanvasRenderingContext2D} */ (sn.getContext('2d')), dim, d);
+        this.renderStatic(/** @type {CanvasRenderingContext2D} */ (sn.getContext('2d')), dim, d, true);
         this.snapKey = key;
       }
       x.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -496,7 +508,7 @@ export class MapView {
       const ld = Math.min(d, 1.5), lo = this.lo || (this.lo = document.createElement('canvas'));
       const lw = Math.round(this.W * ld), lh = Math.round(this.H * ld);
       if (lo.width !== lw || lo.height !== lh) { lo.width = lw; lo.height = lh; }
-      this.renderStatic(/** @type {CanvasRenderingContext2D} */ (lo.getContext('2d')), dim, ld);
+      this.renderStatic(/** @type {CanvasRenderingContext2D} */ (lo.getContext('2d')), dim, ld, false);
       x.clearRect(0, 0, this.canvas.width, this.canvas.height);
       x.imageSmoothingQuality = 'low';
       x.drawImage(lo, 0, 0, this.canvas.width, this.canvas.height);
@@ -539,7 +551,7 @@ export class MapView {
     if (this.onCam) this.onCam(this.cam);
   }
   /** Fondo: retícula, mapa en memoria, atenuado, provincias activas y nombres. @param {CanvasRenderingContext2D} x @param {number} dim @param {number} d escala de píxeles */
-  renderStatic(x, dim, d) {
+  renderStatic(x, dim, d, still = true) {
     const c = this.cam, f = this.free();
     x.setTransform(1, 0, 0, 1, 0, 0);
     x.clearRect(0, 0, x.canvas.width, x.canvas.height);
@@ -548,14 +560,13 @@ export class MapView {
     this.drawGrid(x, c, d);
     if (this.cache) { x.imageSmoothingQuality = 'high'; x.drawImage(this.cache, -M, -M, this.map.w + 2 * M, this.map.h + 2 * M); }
     const u = 1 / c.s;
+    this.drawEdges(x, still);
     if (dim > .001) {
       x.save(); x.setTransform(d, 0, 0, d, 0, 0); x.fillStyle = this.pal().dim; x.globalAlpha = dim; x.fillRect(0, 0, this.W, this.H); x.restore();
       x.save(); x.globalAlpha = Math.min(1, dim * 1.4);
       for (const p of this.active) { this.fillProvince(x, p, this.provColor(p)); this.rimProvince(x, p, this.provColor(p), u); this.glowProvince(x, p, u, 1.6); }
       x.restore();
     }
-    // con zoom la imagen en memoria se queda corta: las fronteras se repasan en vectorial (mismo grosor)
-    if (c.s * d > this.cacheK * 1.08 && dim < .5) this.strokeBorders(x, 1 / this.fitScale());
     if (this.me >= 0) this.drawMine(x, u);
     if (this.labels) this.drawLabels(x, dim, d);
   }

@@ -101,9 +101,11 @@ test('reclutar, construir, mejorar y contratar cuestan oro', () => {
   assert.equal(g.F.gold[me], gold0 - c1);
   assert.ok(E.buildCost(geo, g, me, me, 'cuartel') > c1, 'subir de nivel cuesta más');
   assert.throws(() => act(g, {type:'build', f:P('Barcelona'), p:P('Barcelona'), b:'puerto'}), /oro/, 'Barcelona tiene costa pero no oro');
-  g = act(g, {type:'research', f:me, k:'artilleria'});
+  const gold1 = g.F.gold[me], sg = E.saberGold(g, me, 'herreria');
+  g = act(g, {type:'research', f:me, k:'herreria'});
+  assert.equal(g.F.gold[me], gold1 - sg, 'lo que falta de saber se paga con oro');
   assert.deepEqual(g.F.tech[me], [0, 1, 0, 0]);
-  assert.equal(E.attackMul(geo, g, me, me, P('Toledo')) - E.attackMul(geo, game(), me, me, P('Toledo')), 10, 'artillería +10 %');
+  assert.equal(E.attackMul(geo, g, me, me, P('Toledo')) - E.attackMul(geo, game(), me, me, P('Toledo')), 10, 'herrería +10 %');
   assert.equal(E.attackMul(geo, g, me, me, P('Toledo'), false) + 15, E.attackMul(geo, g, me, me, P('Toledo')), 'el general de asedio +15 %');
   assert.throws(() => act(g, {type:'hire', f:me, p:me, skill:'defensa'}), /Ya hay un general/);
   g.P.owner[P('Toledo')] = me;

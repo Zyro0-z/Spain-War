@@ -403,7 +403,7 @@ svg{display:block}
 /* ======================= Conquista ======================= */
 #map{touch-action:none}
 #ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;overflow:visible}
-.tk text{font:800 12.5px/1 var(--display);fill:#fff;paint-order:stroke;stroke:rgba(0,0,0,.45);stroke-width:2.2px;letter-spacing:.02em}
+.tk text{font:800 11.5px/1 var(--display);fill:#fff;paint-order:stroke;stroke:rgba(0,0,0,.45);stroke-width:2.2px;letter-spacing:.02em}
 .tk .tk-x{font-size:10px;fill:#FFD66E}
 .tk rect:first-of-type{filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
 .hl-sel{fill:rgba(255,255,255,.12);stroke:#fff;stroke-width:2.4}
@@ -818,4 +818,57 @@ details.adv[open] summary::after{content:" −"}
 .tk-u{filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
 .clash{pointer-events:none}
 @media (prefers-reduced-motion:reduce){.cat-riada .cat-pat,.cat-incendio .cat-pat,.cat-bloqueo .cat-edge,.ov-city .city-in.grow{animation:none}}
-.ov-tok.far .tk-u{display:none}
+/* fichas por nivel de zoom */
+.ov-tok .tk-crown{display:none}
+.ov-tok .tk-castle,.ov-tok .tk-flag{display:none}
+.ov-tok:not(.far) .tk.cap .tk-castle,.ov-tok:not(.far) .tk.cap .tk-flag{display:inline}
+.ov-tok.far .tk.cap .tk-crown{display:inline}
+.ov-tok.far .tk-u,.ov-tok.far .tk-b{display:none}
+.ov-tok.far .tk text{font-size:10px}
+.ov-tok.far .tk .tk-x{font-size:8px}
+/* ilustraciones de edificios */
+.bart{flex:none;display:block;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
+.bart.sm{width:52px;height:52px;margin:-6px -2px -6px -6px}
+.bart.slot{width:44px;height:44px}
+.slot{padding:2px 4px 4px}
+.slot.empty{width:52px;min-height:58px}
+.wonder-row .bart.sm{width:58px;height:58px}
+/* saberes */
+.era-chip{pointer-events:auto;position:relative}
+.era-chip .dot2{position:absolute;top:-2px;right:-2px;width:9px;height:9px;border-radius:50%;background:var(--gold);box-shadow:0 0 6px var(--gold)}
+.sab-head{display:flex;gap:12px;align-items:center;margin:0 2px 6px}
+.sab-head>div:first-child{display:flex;flex-direction:column;padding:10px 14px;border-radius:16px;background:linear-gradient(180deg,rgba(255,229,138,.18),rgba(212,155,34,.08));box-shadow:inset 0 0 0 1px rgba(242,201,76,.4)}
+.sab-head span{font:700 10px/1 var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--ink3)}
+.sab-head b{font:800 30px/1 var(--display);color:var(--gold)}
+.sab-head em{font:700 12px/1 var(--display);font-style:normal;color:var(--green);margin-top:2px}
+.sab-era{flex:1;min-width:0}
+.sab-era span{font-size:12px;color:var(--ink)}
+.sab-era .pbar{height:8px;margin:6px 0 4px;border-radius:4px;background:var(--fill2);overflow:hidden}
+.sab-era .pbar i{display:block;height:100%;background:linear-gradient(90deg,#F2C94C,#FFE58A)}
+.sab-era small{font-size:11.5px;color:var(--ink2)}
+.era-d{margin:2px 4px 6px!important}
+.sab-g{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.sab-n{display:flex;gap:8px;align-items:flex-start;text-align:left;padding:9px 8px;border-radius:14px;background:var(--fill);box-shadow:inset 0 0 0 1px var(--glass-brd);color:var(--ink);min-width:0}
+.sab-n .t{min-width:0;display:flex;flex-direction:column;gap:2px}
+.sab-n b{font:700 14px/1.15 var(--ui)}
+.sab-n small{font-size:11.5px;line-height:1.25;color:var(--ink2)}
+.sab-n em{font:700 10.5px/1.2 var(--display);letter-spacing:.04em;font-style:normal;color:var(--ink3);text-transform:uppercase;margin-top:2px}
+.sab-n .gly{width:30px;height:30px}
+.sab-n.known{background:linear-gradient(180deg,rgba(124,240,168,.16),rgba(124,240,168,.05));box-shadow:inset 0 0 0 1px rgba(124,240,168,.45)}
+.sab-n.known em{color:var(--green)}
+.sab-n.open{box-shadow:inset 0 0 0 1.5px rgba(242,201,76,.65)}
+.sab-n.open em{color:var(--gold)}
+.sab-n.open:disabled{opacity:1}
+.sab-n.lock{opacity:.5}
+.gly.sab.s0 circle{fill:#2A2214;stroke:#D9B26A}.gly.sab.s0 path{stroke:#FFE6B0}
+.gly.sab.s1 circle{fill:#3A1712;stroke:#FF8A6E}.gly.sab.s1 path{stroke:#FFD9CF}
+.gly.sab.s2 circle{fill:#1A2340;stroke:#9DB8FF}.gly.sab.s2 path{stroke:#E1E9FF}
+.gly.sab.s3 circle{fill:#1E1A2E;stroke:#C59BFF}.gly.sab.s3 path{stroke:#EEDFFF}
+.gly.sab.s4 circle{fill:#13302A;stroke:#6FE0C0}.gly.sab.s4 path{stroke:#D5FFF3}
+/* informe de provincia */
+button.facts{position:relative;width:100%;text-align:left;color:inherit;font:inherit;padding:0;background:none;border:0}
+button.facts .rep-hint{position:absolute;right:-4px;top:50%;transform:translateY(-50%);width:16px;height:16px;opacity:.45}
+button.facts .rep-hint .ic{width:16px;height:16px}
+button.facts:active{opacity:.75}
+.ledger.rep .rowi{padding-top:9px;padding-bottom:9px}
+.ledger.rep .rowi .num{font-size:16px}

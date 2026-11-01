@@ -20,7 +20,7 @@ export const BUILDINGS = {
   catedral:{name:'Catedral', cost:45, max:3, desc:['+5 de lealtad por turno', '+10 de lealtad, sin revueltas', '+15 de lealtad, sin revueltas']},
   torre:{name:'Torre de vigía', cost:25, max:2, desc:['Ves tropas y postura a 2 provincias; +10 % de defensa', 'Ves a 3 provincias; +20 % de defensa']},
   caminos:{name:'Caminos', cost:30, max:2, desc:['+1 de alcance al mover desde aquí', '+2 de alcance al mover desde aquí']},
-  universidad:{name:'Universidad', cost:50, max:3, era:1, desc:['Mejoras −10 %', 'Mejoras −20 %', 'Mejoras −30 %']},
+  universidad:{name:'Universidad', cost:50, max:3, era:1, desc:['+2 de saber por turno', '+4 de saber por turno', '+6 de saber por turno']},
   astillero:{name:'Astillero', cost:45, max:3, era:1, coast:true, desc:['Construye 2 barcos por turno', '4 barcos por turno', '6 barcos por turno']},
   almacen:{name:'Almacén', cost:30, max:2, era:2, desc:['Suministro aunque quede aislada; tope +6', 'Tope +12']},
   hospital:{name:'Hospital', cost:40, max:3, era:2, desc:['−15 % de bajas en batallas de aquí', '−30 % de bajas', '−45 % de bajas']},
@@ -58,7 +58,7 @@ export const WONDERS = {
   murallas:{name:'Las Murallas de Ávila', ine:'05', cost:110, desc:'+30 % de defensa en tu capital'},
   alcazar:{name:'El Alcázar de Toledo', ine:'45', cost:130, desc:'Reclutar −1 de oro en todas tus provincias'},
   pilar:{name:'El Pilar', ine:'50', cost:120, desc:'Lo que conquistas empieza con 60 de lealtad'},
-  salamanca:{name:'La Universidad de Salamanca', ine:'37', cost:140, desc:'Mejoras −25 %'},
+  salamanca:{name:'La Universidad de Salamanca', ine:'37', cost:140, desc:'Saberes −25 % y +3 de saber por turno'},
   merida:{name:'El Teatro de Mérida', ine:'06', cost:120, desc:'No hay revueltas en tus provincias'},
   belem:{name:'La Torre de Belém', ine:'PT', cost:140, desc:'Barcos −40 %'},
 };
@@ -126,11 +126,47 @@ export const MINISTER_COST = 40;
 /* ======================= Eras ======================= */
 export const ERAS = [
   {name:'Medieval', at:0, desc:'Infantería, caballería y milicia.'},
-  {name:'Renacimiento', at:4, desc:'Artillería, universidades, astilleros. +10 % de oro.'},
-  {name:'Moderna', at:8, desc:'Hospitales y almacenes. +10 % de ataque.'},
+  {name:'Renacimiento', at:5, desc:'Artillería, universidades, astilleros. +10 % de oro.'},
+  {name:'Moderna', at:12, desc:'Hospitales y almacenes. +10 % de ataque.'},
 ];
-/** Era de un bando según los niveles de mejora que tiene. @param {number[]} tech */
-export const eraOf = tech => { const s = tech.reduce((a, b) => a + b, 0); return s >= ERAS[2].at ? 2 : s >= ERAS[1].at ? 1 : 0; };
+/** Era de un bando según cuántos saberes conoce. @param {number} n */
+export const eraOf = n => n >= ERAS[2].at ? 2 : n >= ERAS[1].at ? 1 : 0;
+
+/* ======================= Saberes ======================= */
+/**
+ * Árbol de saberes: 24 en tres eras. br: rama clásica que sube un nivel (0 logística, 1 armamento, 2 diplomacia,
+ * 3 espionaje; -1 si es un saber especial). Se pagan con puntos de saber (o con oro: 4 por punto que falte).
+ * @typedef {{k:string, name:string, era:number, br:number, cost:number, req:string[], desc:string}} Saber
+ * @type {Saber[]}
+ */
+export const SABERES = [
+  {k:'calzadas', name:'Calzadas', era:0, br:0, cost:15, req:[], desc:'Mover 2 provincias'},
+  {k:'herreria', name:'Herrería', era:0, br:1, cost:15, req:[], desc:'+10 % de ataque'},
+  {k:'cancilleria', name:'Cancillería', era:0, br:2, cost:15, req:[], desc:'Aceptan antes tus propuestas'},
+  {k:'correos', name:'Correos y espías', era:0, br:3, cost:15, req:[], desc:'+15 % de éxito al espiar'},
+  {k:'estribo', name:'Estribo', era:0, br:-1, cost:21, req:['herreria'], desc:'Caballería +15 % al atacar'},
+  {k:'rotacion', name:'Rotación de cultivos', era:0, br:-1, cost:18, req:[], desc:'+1 tropa por turno donde haya granja'},
+  {k:'gremios', name:'Gremios', era:0, br:-1, cost:18, req:[], desc:'+1 de oro por nivel de mercado'},
+  {k:'mamposteria', name:'Mampostería', era:0, br:-1, cost:18, req:['calzadas'], desc:'Edificios −10 %'},
+  {k:'intendencia', name:'Intendencia', era:1, br:0, cost:43, req:['calzadas'], desc:'Mover 3 provincias'},
+  {k:'polvora', name:'Pólvora', era:1, br:1, cost:46, req:['herreria'], desc:'+20 % de ataque'},
+  {k:'embajadas', name:'Embajadas', era:1, br:2, cost:43, req:['cancilleria'], desc:'Los regalos rinden el doble'},
+  {k:'cifrado', name:'Cifrado', era:1, br:3, cost:43, req:['correos'], desc:'+30 % de éxito y espiar −30 %'},
+  {k:'imprenta', name:'Imprenta', era:1, br:-1, cost:46, req:['cancilleria'], desc:'+3 de saber por turno'},
+  {k:'navegacion', name:'Navegación de altura', era:1, br:-1, cost:43, req:['calzadas'], desc:'Barcos con 7 tropas; desembarco −10 % en vez de −20 %'},
+  {k:'banca', name:'Banca', era:1, br:-1, cost:50, req:['gremios'], desc:'+10 % de oro'},
+  {k:'tercios', name:'Tercios', era:1, br:-1, cost:50, req:['herreria'], desc:'Infantería +10 % al atacar y al defender'},
+  {k:'postas', name:'Postas', era:2, br:0, cost:78, req:['intendencia'], desc:'Suministro a través de aliados'},
+  {k:'fundicion', name:'Fundición de cañones', era:2, br:1, cost:85, req:['polvora'], desc:'+30 % de ataque'},
+  {k:'tratados', name:'Tratados', era:2, br:2, cost:78, req:['embajadas'], desc:'Pactos de 20 turnos'},
+  {k:'policia', name:'Policía secreta', era:2, br:3, cost:78, req:['cifrado'], desc:'+45 % de éxito al espiar'},
+  {k:'abaluartada', name:'Fortificación abaluartada', era:2, br:-1, cost:85, req:['mamposteria', 'polvora'], desc:'+15 % de defensa con murallas o fortaleza'},
+  {k:'ilustracion', name:'Ilustración', era:2, br:-1, cost:93, req:['imprenta'], desc:'+10 % de oro y +2 de lealtad por turno'},
+  {k:'medicina', name:'Medicina', era:2, br:-1, cost:81, req:['imprenta'], desc:'−20 % de bajas propias; las epidemias no matan'},
+  {k:'academias', name:'Academias militares', era:2, br:-1, cost:85, req:['tercios'], desc:'+1 general y los nuevos empiezan en nivel 1'},
+];
+/** Oro por cada punto de saber que falta al aprender. */
+export const GOLD_PER_SABER = 4;
 
 /* ======================= Impuestos y mantenimiento ======================= */
 export const TAXES = [

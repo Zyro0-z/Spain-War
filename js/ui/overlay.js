@@ -4,6 +4,7 @@
 // (fichas y flechas en píxeles de pantalla: siempre nítidas y del mismo tamaño).
 import {lighten, darken} from '../art.js';
 import {UNIT_ICON, WONDER_ICON} from './glyphs.js';
+import {buildArtRaw} from './buildart.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 /** @param {string} tag @param {Record<string, string|number>} [attrs] */
@@ -34,7 +35,7 @@ const HOUSES = [[0, -4, 7, 6], [-6, 0, 7, 5], [6, 0, 6, 6], [-11, -3.5, 6, 5], [
 const ROOFS = ['#B4532F', '#A2462A', '#C0653A', '#93412A'];
 /**
  * Ciudad dibujada: casas según su tamaño, catedral, murallas, torre, puerto y maravilla.
- * @param {{lvl:number, walls:boolean, church:boolean, tower:boolean, port:boolean, wonder:boolean, seed:number}} c
+ * @param {{lvl:number, walls:boolean, church:boolean, tower:boolean, port:boolean, wonder:boolean, seed:number, extra?:string[]}} c
  */
 function cityMarkup(c) {
   const n = [3, 4, 6, 8, 10][Math.max(0, Math.min(4, c.lvl - 1))];
@@ -50,6 +51,11 @@ function cityMarkup(c) {
   if (c.tower) out += `<rect x="${-20}" y="-12" width="4" height="13" fill="#CDB991" ${ink}/><path d="M-20.8-12 -18-16.5 -15.2-12Z" fill="#7A3B22" ${ink}/><rect x="-18.8" y="-9.5" width="1.6" height="2" fill="#3B2410"/>`;
   if (c.walls) out += `<path d="M-22 9V4.5h2.4v1.4h2.2V4.5h2.4v1.4h2.2V4.5H-10v1.4h2.2V4.5h2.4v1.4h2.2V4.5H-1v1.4h2.2V4.5h2.4v1.4h2.2V4.5H8v1.4h2.2V4.5h2.4v1.4h2.2V4.5H17v1.4h2.2V4.5H22V9Z" fill="#C7AE7E" ${ink}/><rect x="-24" y="1" width="5" height="8" fill="#B89C6A" ${ink}/><rect x="19" y="1" width="5" height="8" fill="#B89C6A" ${ink}/>`;
   if (c.port) out += `<path d="M18 9h11l-2 3.2h-7.4Z" fill="#7A4A26" ${ink}/><path d="M23.2 9V1.2M23.8 1.8l4 6.2h-4Z" fill="#F4EEDC" ${ink}/>`;
+  // otros edificios, dibujados en pequeño alrededor (atrás primero)
+  const spots = [[-31, -8], [31, -8], [-34, 8], [34, 8]];
+  const ex = (c.extra || []).slice(0, 4).map((k, i) => /** @type {[string, number[]]} */ ([k, spots[i]])).sort((a, b) => a[1][1] - b[1][1]);
+  out = ex.filter(([, [, y]]) => y < 0).map(([k, [x, y]]) => `<g transform="translate(${x} ${y}) scale(.3)">${buildArtRaw(k)}</g>`).join('') + out
+    + ex.filter(([, [, y]]) => y >= 0).map(([k, [x, y]]) => `<g transform="translate(${x} ${y}) scale(.3)">${buildArtRaw(k)}</g>`).join('');
   if (c.wonder) out += `<g transform="translate(${c.port ? -29 : 25} -2)"><circle r="9.5" fill="rgba(255,214,110,.28)"/><path d="${WONDER_ICON}" transform="scale(1.15)" fill="none" stroke="#3A2405" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/><path d="${WONDER_ICON}" transform="scale(1.15)" fill="none" stroke="#FFD66E" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></g>`;
   return out;
 }
@@ -83,7 +89,7 @@ export class Overlay {
     this.gTok = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-tok'})));
     /** Textos que suben (+3, −20 de oro…). */
     this.gFx = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-fx'})));
-    /** @type {Map<number, {g:SVGGElement, bg:SVGRectElement, txt:SVGTextElement, castle:SVGPathElement, extra:SVGTextElement, flag:SVGGElement, cloth:SVGPathElement, pill:SVGGElement, bld:SVGGElement, bldBg:SVGCircleElement, bldIcon:SVGPathElement, b:string, shine:SVGRectElement, unit:SVGGElement, unitBg:SVGCircleElement, unitIcon:SVGPathElement, u:number}>} */
+    /** @type {Map<number, {g:SVGGElement, bg:SVGRectElement, txt:SVGTextElement, castle:SVGPathElement, extra:SVGTextElement, flag:SVGGElement, cloth:SVGPathElement, pill:SVGGElement, bld:SVGGElement, bldBg:SVGCircleElement, bldIcon:SVGPathElement, bldIn:SVGGElement, crown:SVGPathElement, cap:boolean, b:string, shine:SVGRectElement, unit:SVGGElement, unitBg:SVGCircleElement, unitIcon:SVGPathElement, u:number}>} */
     this.tokens = new Map();
     /** @type {{from:number, to:number, col:string, path:SVGPathElement, under:SVGPathElement, head:SVGPathElement, t0:number, dur:number}[]} */
     this.arrows = [];
@@ -115,14 +121,18 @@ export class Overlay {
       const pill = /** @type {SVGGElement} */ (el('g', {class:'tk-pill'}));
       pill.append(bg, shine, txt, unit);
       // edificio de la provincia: insignia redonda abajo a la derecha
-      const bld = /** @type {SVGGElement} */ (el('g', {class:'tk-b', transform:'translate(21 8)'}));
+      // (el grupo exterior coloca, el interior salta: la animación CSS no pisa la posición)
+      const bld = /** @type {SVGGElement} */ (el('g', {transform:'translate(20 7)'}));
+      const bldIn = /** @type {SVGGElement} */ (el('g', {class:'tk-b'}));
       const bldIcon = /** @type {SVGPathElement} */ (el('path', {fill:'none', stroke:'#FFE9A8', 'stroke-width':1.5, 'stroke-linecap':'round', 'stroke-linejoin':'round'}));
       const bldBg = /** @type {SVGCircleElement} */ (el('circle', {r:7.6, fill:'url(#tkBld)', stroke:'#F2C94C', 'stroke-width':1.1}));
-      bld.append(bldBg, bldIcon);
+      bldIn.append(bldBg, bldIcon); bld.appendChild(bldIn);
       bld.style.display = 'none';
-      g.append(flag, castle, pill, bld, extra);
+      // de lejos, la capital es una coronita sobre el número
+      const crown = /** @type {SVGPathElement} */ (el('path', {d:'M-4 1.6h8l1-5-2.6 2L0-4.6-2.4-1.4-5-3.4Z', fill:'url(#tkGold)', stroke:'#3D2604', 'stroke-width':.6, class:'tk-crown', transform:'translate(0 -8.5)'}));
+      g.append(flag, castle, pill, bld, crown, extra);
       this.gTok.appendChild(g);
-      this.tokens.set(p, {g, bg, txt, castle, extra, flag, cloth, pill, bld, bldBg, bldIcon, b:'', shine, unit, unitBg, unitIcon, u:-2});
+      this.tokens.set(p, {g, bg, txt, castle, extra, flag, cloth, pill, bld, bldIn, bldBg, bldIcon, b:'', shine, unit, unitBg, unitIcon, u:-2, crown, cap:false});
     }
   }
   /**
@@ -136,7 +146,7 @@ export class Overlay {
       t.bg.setAttribute('stroke', f === s.mine ? '#FFD66E' : lighten(col, .35));
       t.bg.setAttribute('stroke-width', f === s.mine ? '2' : '1.2');
       t.txt.textContent = n == null ? '?' : String(n);
-      t.castle.style.display = t.flag.style.display = s.capitals.has(p) ? '' : 'none';
+      t.cap = s.capitals.has(p); t.g.classList.toggle('cap', t.cap);
       t.cloth.setAttribute('fill', col);
       t.extra.textContent = s.marks?.get(p) || '';
       const b = s.bld?.[p] || '';
@@ -176,13 +186,13 @@ export class Overlay {
   }
   /**
    * Ciudades: una por provincia, crecen con su categoría y sus edificios. Solo se ven con zoom.
-   * @param {{p:number, lvl:number, walls:boolean, church:boolean, tower:boolean, port:boolean, wonder:boolean}[]} list
+   * @param {{p:number, lvl:number, walls:boolean, church:boolean, tower:boolean, port:boolean, wonder:boolean, extra?:string[]}[]} list
    */
   cities(list) {
     const seen = new Set();
     for (const c of list) {
       seen.add(c.p);
-      const key = [c.lvl, c.walls, c.church, c.tower, c.port, c.wonder].join();
+      const key = [c.lvl, c.walls, c.church, c.tower, c.port, c.wonder, ...(c.extra || [])].join();
       let e = this.cityEls.get(c.p);
       if (!e) { e = {g:/** @type {SVGGElement} */ (el('g', {class:'city'})), key:''}; this.gCity.appendChild(e.g); this.cityEls.set(c.p, e); }
       if (e.key !== key) {
@@ -287,8 +297,8 @@ export class Overlay {
   /** La ficha de una provincia da un salto (al reclutar, construir…). @param {number} p */
   pop(p) {
     const t = this.tokens.get(p); if (!t) return;
-    t.pill.classList.remove('pop'); t.bld.classList.remove('pop'); void t.pill.getBoundingClientRect();
-    t.pill.classList.add('pop'); if (t.b) t.bld.classList.add('pop');
+    t.pill.classList.remove('pop'); t.bldIn.classList.remove('pop'); void t.pill.getBoundingClientRect();
+    t.pill.classList.add('pop'); if (t.b) t.bldIn.classList.add('pop');
   }
   /**
    * Texto que sube desde la ficha y se desvanece.
@@ -351,23 +361,27 @@ export class Overlay {
     this.gCat.setAttribute('transform', `matrix(${c.s},0,0,${c.s},${ox},${oy})`);
     for (const [p, e] of this.cityEls) {
       const pr = this.map.provinces[p], room = pr.room * c.s;
-      const tk = this.tokens.get(p), z = c.s / v.fitScale(), on = z >= 1.8 && room >= 22 && !!tk && tk.g.style.display !== 'none';
+      const tk = this.tokens.get(p), z = c.s / v.fitScale(), on = z >= 2.4 && room >= 22 && !!tk && tk.g.style.display !== 'none';
       e.g.classList.toggle('on', on);
       if (!on) continue;
       const [x, y] = v.toScreen(pr.label[0], pr.label[1] + pr.room * .62), kc = Math.max(.8, Math.min(1.6, .6 + .2 * z));
       e.g.setAttribute('transform', `translate(${x.toFixed(1)} ${(y + 6).toFixed(1)}) scale(${kc.toFixed(3)})`);
     }
     this.gSmoke.querySelectorAll('g').forEach(g => { const [x, y] = this.anchor(+(g.getAttribute('data-p') || 0)); g.setAttribute('transform', `translate(${(x + 16).toFixed(1)} ${(y - 6).toFixed(1)})`); });
-    const k = Math.max(.8, Math.min(1.35, .55 + .45 * c.s / v.fitScale()));
+    const k = Math.max(.9, Math.min(1.25, .6 + .35 * c.s / v.fitScale()));
     const far = c.s / v.fitScale() < 1.6;
     if (far !== this.far) {
-      // de lejos la ficha es más estrecha y sin insignia de tropa
+      // de lejos: solo un número pequeño (y una corona en las capitales); de cerca: tipo de tropa, edificio y castillo
       this.far = far; this.gTok.classList.toggle('far', far);
       for (const t of this.tokens.values()) {
-        for (const r of [t.bg, t.shine]) { r.setAttribute('x', '-15'); r.setAttribute('width', far ? '30' : '34'); }
-        t.txt.setAttribute('x', far ? '0' : '4');
-        t.castle.setAttribute('transform', `translate(${far ? -23 : -31} 6) scale(.95)`); t.flag.setAttribute('transform', `translate(${far ? -23 : -31} 1.5)`);
-        t.bld.setAttribute('transform', `translate(${far ? 17 : 21} 8)`); t.extra.setAttribute('x', far ? '14' : '18');
+        for (const r of [t.bg, t.shine]) {
+          r.setAttribute('x', far ? '-11' : '-14'); r.setAttribute('width', far ? '22' : '32');
+          r.setAttribute('y', far ? '-7' : '-8'); r.setAttribute('height', far ? '14' : '16'); r.setAttribute('rx', far ? '7' : '8');
+        }
+        t.txt.setAttribute('x', far ? '0' : '4'); t.txt.setAttribute('y', far ? '3.5' : '4');
+        t.unit.setAttribute('transform', 'translate(-12 0) scale(.86)');
+        t.castle.setAttribute('transform', 'translate(-27 5) scale(.82)'); t.flag.setAttribute('transform', 'translate(-27 1) scale(.9)');
+        t.bld.setAttribute('transform', 'translate(20 7) scale(.86)'); t.extra.setAttribute('x', far ? '11' : '17');
       }
     }
     for (const [p, t] of this.tokens) {

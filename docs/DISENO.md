@@ -1,4 +1,4 @@
-# España en Guerra · Diseño del juego (v3, conquista por turnos)
+# España en Guerra · Diseño del juego (v4, conquista por turnos)
 
 Juegas con un bando y conquistas España provincia a provincia. No hay ruleta: tú decides a quién atacas y cuándo.
 Todo el motor es determinista (generador con semilla, solo aritmética entera) para poder repetir partidas y
@@ -45,7 +45,7 @@ Mejorar un edificio no ocupa hueco nuevo. El precio sube con el nivel.
 | Catedral | 45 | +5 → +15 de lealtad; desde nivel 2, sin revueltas |
 | Torre de vigía (2 niveles) | 25 | Ves tropas y postura a 2 → 3 provincias; +10 → +20 % de defensa |
 | Caminos (2 niveles) | 30 | +1 → +2 de alcance al mover desde aquí |
-| Universidad (Renacimiento) | 50 | Mejoras −10 % → −30 % |
+| Universidad (Renacimiento) | 50 | +2 → +6 de saber por turno |
 | Astillero (Renacimiento, costa) | 45 | 2 → 6 barcos por turno |
 | Almacén (Moderna, 2 niveles) | 30 | Suministro aunque esté aislada; tope +6 → +12 |
 | Hospital (Moderna) | 40 | −15 % → −45 % de bajas en batallas de aquí |
@@ -72,7 +72,7 @@ Una por partida y sitio, en su provincia histórica. Se dibujan en el mapa y sum
 | Las Murallas de Ávila | 110 | +30 % de defensa en tu capital |
 | El Alcázar de Toledo | 130 | Reclutar −1 de oro |
 | El Pilar (Zaragoza) | 120 | Lo conquistado empieza con 60 de lealtad |
-| La Universidad de Salamanca | 140 | Mejoras −25 % |
+| La Universidad de Salamanca | 140 | Saberes −25 % y +3 de saber por turno |
 | El Teatro de Mérida (Badajoz) | 120 | Sin revueltas |
 | La Torre de Belém (Portugal) | 140 | Barcos −40 % |
 
@@ -181,10 +181,18 @@ según la situación: fronteras, oro guardado, huecos libres, vecinos dispuestos
 
 ## Profundidad
 
-- **Mejoras** (4 ramas × 3 niveles; 30/60/100 de oro): Logística (alcance y suministro por aliados), Armamento
-  (+10 % ataque por nivel), Diplomacia (más fácil que acepten) y Espionaje (+éxito, más barato).
-- **Eras**: Medieval; Renacimiento con 4 niveles de mejora (artillería, universidades, astilleros, +10 % de oro);
-  Moderna con 8 (hospitales, almacenes, +10 % de ataque).
+- **Saberes**: árbol de 24 en tres eras, con requisitos. Cada turno se gana saber (2 + 1 por cada 4 provincias,
+  +2 por nivel de universidad, +3 la imprenta, +3 Salamanca); lo que falte se paga a 4 de oro por punto.
+  Los de las cuatro ramas clásicas suben su nivel (logística, armamento, diplomacia, espionaje):
+
+  | Era | Rama | Especiales |
+  | --- | --- | --- |
+  | Medieval (15–21) | Calzadas, Herrería, Cancillería, Correos y espías | Estribo (caballería +15 %), Rotación de cultivos (+1 tropa con granja), Gremios (+1 oro por nivel de mercado), Mampostería (edificios −10 %) |
+  | Renacimiento, con 5 saberes (43–50) | Intendencia, Pólvora, Embajadas, Cifrado | Imprenta (+3 saber), Navegación de altura (barcos de 7, desembarco −10 %), Banca (+10 % oro), Tercios (infantería +10 % al atacar y defender) |
+  | Moderna, con 12 saberes (78–93) | Postas, Fundición de cañones, Tratados, Policía secreta | Fortificación abaluartada (+15 % defensa con murallas o fortaleza), Ilustración (+10 % oro, +2 lealtad), Medicina (−20 % bajas, epidemias sin muertes), Academias militares (+1 general, nivel 1) |
+
+- **Eras**: Medieval; Renacimiento con 5 saberes (artillería, universidades, astilleros, +10 % de oro);
+  Moderna con 12 (hospitales, almacenes, +10 % de ataque).
 - **Decisiones**: a veces llega una decisión con dos o tres opciones (revuelta, cosecha, mercaderes, refugiados,
   bandidos, un noble, plata, epidemia, artistas, un desertor). Si no eliges, se toma la última al terminar el turno.
 - **Misiones**: encargos con plazo y premio (tomar una provincia, construir, firmar un acuerdo, reunir tropas, ahorrar).
@@ -200,9 +208,11 @@ según la situación: fronteras, oro guardado, huecos libres, vecinos dispuestos
 ## Mapa
 
 - **Ciudades** dibujadas en cada provincia al acercar: crecen con la población y los edificios, y muestran murallas,
-  catedral, torre, puerto y maravilla.
-- **Fichas**: número de tropas, insignia del tipo de tropa dominante (artillería o caballería si son un tercio),
-  castillo y bandera en las capitales e insignia del edificio principal (dorada si hay maravilla).
+  catedral, torre, puerto, maravilla y, alrededor, los demás edificios ilustrados (granja, mina, cuartel…).
+- **Fichas por nivel de zoom**: de lejos, solo el número (y una corona en las capitales); al acercar, insignia del tipo
+  de tropa dominante, castillo y bandera en las capitales e insignia del edificio principal (dorada si hay maravilla).
+- **Fronteras** en vectorial siempre: finas y nítidas a cualquier zoom; dentro de un mismo bando, discontinuas y suaves.
+- **Informe de provincia** (tocando los datos de la ficha): desglose de oro, tropas por turno, lealtad y defensa.
 - **Batallas**: flecha, marcha de la ficha, choque de espadas con onda y chispas en la frontera, dados y bajas que suben
   sobre las dos provincias.
 

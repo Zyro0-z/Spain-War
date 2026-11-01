@@ -7,7 +7,7 @@ import {winProb} from '../engine/prob.js';
 import {tier, terrain, coastal, TERRAIN_DEF, GIVEN, EPITHET, SPECIALTY, culture, SEA, SEA_ADJ} from './data.js';
 import {
   BUILDINGS, BUILDING_KEYS, slotsFor, WONDERS, UNITS, INF, CAB, ART, MIL, unitAttack, TACTICS, SKILLS, GEN_XP,
-  MINISTERS, MINISTER_NAMES, MINISTER_COST, eraOf, TAXES, UPKEEP_PER, SHIP_COST, SHIP_CAP, DECISIONS,
+  MINISTERS, MINISTER_NAMES, MINISTER_COST, eraOf, TAXES, UPKEEP_PER, SHIP_COST, SHIP_CAP, DECISIONS, SABERES, GOLD_PER_SABER,
 } from './rules.js';
 export * from './rules.js';
 
@@ -93,7 +93,7 @@ export const SPY_KINDS = {
  */
 /**
  * @typedef {object} Game
- * @property {3} v
+ * @property {number} v
  * @property {string} seed
  * @property {import('../engine/rng.js').RngState} rng
  * @property {number} turn
@@ -103,7 +103,7 @@ export const SPY_KINDS = {
  * @property {Rules} rules
  * @property {number[]} humans bandos humanos
  * @property {Prov} P
- * @property {{name:string[], flag:number[], color:string[], capital:number[], home:number[], gold:number[], morale:number[], alive:boolean[], tech:number[][], trait:string[], banner?:any[], weary:number[], ships:number[], lord:number[], cult:string[], min:Record<string, {name:string, k:string}>[]}} F
+ * @property {{name:string[], flag:number[], color:string[], capital:number[], home:number[], gold:number[], morale:number[], alive:boolean[], tech:number[][], know:string[][], rp:number[], trait:string[], banner?:any[], weary:number[], ships:number[], lord:number[], cult:string[], min:Record<string, {name:string, k:string}>[]}} F
  * @property {number[][]} rel relación −100..100 (simétrica)
  * @property {number[][]} st estado diplomático
  * @property {number[][]} until fin del pacto
@@ -172,12 +172,12 @@ export function createGame(geo, sc, o) {
   const cult = geo.ine.map(culture);
   /** @type {Game} */
   const g = {
-    v:3, seed:o.seed, rng, turn:1, winner:-1, over:false, scenario:sc.id, rules, humans:[...o.humans],
+    v:4, seed:o.seed, rng, turn:1, winner:-1, over:false, scenario:sc.id, rules, humans:[...o.humans],
     P:{owner, troops, u:troops.map(t => [t, 0, 0, 0]), ready:[...troops], bld:owner.map(() => ({})), loyal:owner.map(f => f < 0 ? 0 : 100), origin:[...owner], active,
       tax:owner.map(() => 1), stance:owner.map(() => 0), cult, assim:owner.map(() => 0), wonder:owner.map(() => '')},
     F:{name:[...sc.factions.map(f => f.name), sc.neutral?.length ? 'Tierras libres' : 'Rebeldes'], flag:[...sc.factions.map(f => f.flag), -1], color:[...sc.factions.map(f => f.color), '#6B6F7A'],
       capital, home:[...capital], gold:new Array(nf + 1).fill(20), morale:new Array(nf + 1).fill(100), alive:[...sc.factions.map(() => true), false],
-      tech:Array.from({length:nf + 1}, () => [0, 0, 0, 0]), trait, banner:[...sc.factions.map(f => f.banner || null), null],
+      tech:Array.from({length:nf + 1}, () => [0, 0, 0, 0]), know:Array.from({length:nf + 1}, () => []), rp:new Array(nf + 1).fill(0), trait, banner:[...sc.factions.map(f => f.banner || null), null],
       weary:new Array(nf + 1).fill(0), ships:new Array(nf + 1).fill(0), lord:new Array(nf + 1).fill(-1),
       cult:[...capital.map(c => c >= 0 ? cult[c] : '')], min:[]},
     motto:[...sc.factions.map(f => f.motto || ''), ''],
@@ -214,7 +214,16 @@ function newMinister(rng, role, not) {
  * @param {Geo} geo @param {any} g @returns {Game}
  */
 export function upgradeGame(geo, g) {
-  if (!g || g.v >= 3) return g;
+  if (!g || g.v >= 4) return g;
+  if (g.v < 3) upgradeV3(geo, g);
+  // v4: árbol de saberes. Los niveles de las ramas se convierten en sus saberes, en orden de era.
+  g.F.know = g.F.tech.map((/** @type {number[]} */ t) => t.flatMap((l, br) => SABERES.filter(x => x.br === br).sort((a, b) => a.era - b.era).slice(0, l).map(x => x.k)));
+  g.F.rp = g.F.name.map(() => 0);
+  g.v = 4;
+  return g;
+}
+/** @param {Geo} geo @param {any} g */
+function upgradeV3(geo, g) {
   const P = g.P, F = g.F, n = P.owner.length, nf = F.name.length;
   P.u = P.troops.map((/** @type {number} */ t) => [t, 0, 0, 0]);
   P.bld = P.bld.map((/** @type {any} */ b) => typeof b === 'string' && b ? {[b]:1} : {});
@@ -226,7 +235,6 @@ export function upgradeGame(geo, g) {
   F.min = F.name.map(() => Object.fromEntries(Object.keys(MINISTERS).map(k => [k, newMinister(rng, k, '')])));
   g.gens = (g.gens || []).map((/** @type {any} */ x) => ({...x, skills:x.skills || [x.skill || 'asedio'], age:x.age || 0, pend:0}));
   Object.assign(g, {sieges:[], decisions:[], decSeq:0, missions:[], weds:[], embargo:[], v:3});
-  return g;
 }
 
 /* ======================= Utilidades ======================= */
@@ -241,7 +249,7 @@ export function clone(g) { return typeof structuredClone === 'function' ? struct
 export const encode = g => g.P.owner.map(o => o < 0 ? '.' : String.fromCharCode(48 + o)).join('');
 /** Huella del estado para detectar desajustes en red. @param {Game} g */
 export function hash(g) {
-  const s = JSON.stringify([g.turn, g.P.owner, g.P.u, g.P.bld, g.F.gold, g.F.morale, g.st, g.rng]);
+  const s = JSON.stringify([g.turn, g.P.owner, g.P.u, g.P.bld, g.F.gold, g.F.morale, g.F.rp, g.F.know, g.st, g.rng]);
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
   return (h >>> 0).toString(36);
@@ -275,7 +283,11 @@ export const hasWonder = (g, f, w) => g.P.wonder.some((x, p) => x === w && g.P.o
 /** ¿Tiene el bando este ministro? @param {Game} g @param {number} f @param {string} role @param {string} k */
 export const minister = (g, f, role, k) => !!g.F.min[f] && g.F.min[f][role]?.k === k;
 /** Era de un bando (0 medieval, 1 renacimiento, 2 moderna). @param {Game} g @param {number} f */
-export const era = (g, f) => f >= 0 && g.F.tech[f] ? eraOf(g.F.tech[f]) : 0;
+export const era = (g, f) => f >= 0 && g.F.know?.[f] ? eraOf(g.F.know[f].length) : 0;
+/** Si un bando conoce un saber. @param {Game} g @param {number} f @param {string} k */
+export const knows = (g, f, k) => f >= 0 && !!g.F.know?.[f]?.includes(k);
+/** @type {Record<string, import('./rules.js').Saber>} */
+export const SABER = Object.fromEntries(SABERES.map(x => [x.k, x]));
 /** Tropas que pueden atacar (sin milicia). @param {Game} g @param {number} p */
 export const attackers = (g, p) => g.P.u[p][INF] + g.P.u[p][CAB] + g.P.u[p][ART];
 /** ¿Bando en guerra con alguien? @param {Game} g @param {number} f */
@@ -360,25 +372,36 @@ export function supplied(geo, g, f) {
 }
 /** @param {Game} g @param {number} p @param {string} kind */
 export const effectOn = (g, p, kind) => g.fx.some(e => e.p === p && e.kind === kind && e.until >= g.turn);
+/** @typedef {{lines:[string, string][], total:number}} Parts desglose para el informe de provincia */
 /**
  * Oro de una provincia para su dueño (antes de los multiplicadores del bando).
  * @param {Geo} geo @param {Game} g @param {number} p @param {boolean[]} sup
  */
-export function provinceIncome(geo, g, p, sup) {
-  const f = g.P.owner[p]; if (f < 0 || f === rebels(g)) return 0;
-  if (effectOn(g, p, 'sequia') || effectOn(g, p, 'cuarentena')) return 0;
+export const provinceIncome = (geo, g, p, sup) => incomeParts(geo, g, p, sup, false).total;
+/**
+ * El mismo cálculo con su desglose.
+ * @param {Geo} geo @param {Game} g @param {number} p @param {boolean[]} sup @param {boolean} [why] @returns {Parts}
+ */
+export function incomeParts(geo, g, p, sup, why = true) {
+  /** @type {[string, string][]} */ const L = [];
+  const add = (/** @type {string} */ n, /** @type {number} */ v) => { if (why && v) L.push([n, (v > 0 ? '+' : '−') + Math.abs(v)]); return v; };
+  const mul = (/** @type {string} */ n, /** @type {number} */ pc) => { if (why && pc !== 100) L.push([n, '×' + (pc / 100).toFixed(2).replace('.', ',')]); return pc; };
+  const f = g.P.owner[p]; if (f < 0 || f === rebels(g)) return {lines:L, total:0};
+  if (effectOn(g, p, 'sequia') || effectOn(g, p, 'cuarentena')) { if (why) L.push([effectOn(g, p, 'sequia') ? 'Sequía' : 'Cuarentena', 'sin oro']); return {lines:L, total:0}; }
   const blocked = effectOn(g, p, 'bloqueo'), sp = geo.spec[p];
-  let v = geo.tier[p] + (g.F.capital[f] === p ? 2 : 0) + lvl(g, p, 'mina') * (sp === 'mineria' ? 4 : 2);
-  if (!blocked) v += lvl(g, p, 'puerto') * 2 + (sp === 'pesca' ? 2 : 0);
-  v += ({vino:2, huerta:1, olivo:3, ganado:1, industria:3, mineria:2}[/** @type {'vino'} */ (sp)] || 0);
-  if (sp === 'turismo' && !inWar(g, f)) v += 4;
-  let pct = 100 + 25 * lvl(g, p, 'mercado') + (sp === 'comercio' && !blocked ? 30 : 0);
-  pct = pct * TAXES[g.P.tax[p] ?? 1].gold / 100;
-  if (g.P.cult[p] !== g.F.cult[f]) pct = pct * 80 / 100;
-  if (effectOn(g, p, 'bandidos')) pct = pct / 2;
+  let v = add('Población', geo.tier[p]) + add('Capital', g.F.capital[f] === p ? 2 : 0) + add('Mina', lvl(g, p, 'mina') * (sp === 'mineria' ? 4 : 2));
+  if (!blocked) v += add('Puerto', lvl(g, p, 'puerto') * 2) + add('Pesca', sp === 'pesca' ? 2 : 0);
+  else if (why && lvl(g, p, 'puerto')) L.push(['Puerto bloqueado', '+0']);
+  v += add('Especialidad', {vino:2, huerta:1, olivo:3, ganado:1, industria:3, mineria:2}[/** @type {'vino'} */ (sp)] || 0);
+  if (sp === 'turismo' && !inWar(g, f)) v += add('Turismo en paz', 4);
+  if (knows(g, f, 'gremios')) v += add('Gremios', lvl(g, p, 'mercado'));
+  let pct = 100 + mul('Mercado', 100 + 25 * lvl(g, p, 'mercado')) - 100 + mul('Comercio', sp === 'comercio' && !blocked ? 130 : 100) - 100;
+  pct = pct * mul('Impuestos ' + TAXES[g.P.tax[p] ?? 1].name.toLowerCase(), TAXES[g.P.tax[p] ?? 1].gold) / 100;
+  if (g.P.cult[p] !== g.F.cult[f]) pct = pct * mul('Otra cultura', 80) / 100;
+  if (effectOn(g, p, 'bandidos')) pct = pct * mul('Bandidos', 50) / 100;
   v = Math.floor(v * pct / 100);
-  if (!sup[p] || g.P.loyal[p] < 30) v = Math.floor(v / 2);
-  return v;
+  if (!sup[p] || g.P.loyal[p] < 30) { v = Math.floor(v / 2); if (why) L.push([!sup[p] ? 'Sin suministro' : 'Poco leal', '×0,50']); }
+  return {lines:L, total:v};
 }
 /** Porcentaje que se aplica al oro de las provincias de un bando. @param {Game} g @param {number} f */
 export function incomeMul(g, f) {
@@ -388,6 +411,8 @@ export function incomeMul(g, f) {
   if (hasWonder(g, f, 'sagrada')) mul = mul * 115 / 100;
   if (minister(g, f, 'hacienda', 'recaudador')) mul = mul * 110 / 100;
   if (era(g, f) >= 1) mul = mul * 110 / 100;
+  if (knows(g, f, 'banca')) mul = mul * 110 / 100;
+  if (knows(g, f, 'ilustracion')) mul = mul * 110 / 100;
   mul = mul * (200 - g.F.weary[f]) / 200;
   return mul;
 }
@@ -462,13 +487,20 @@ export function cap(geo, g, p) {
   return 12 + 4 * geo.tier[p] + 8 * lvl(g, p, 'cuartel') + 6 * lvl(g, p, 'almacen') + (f >= 0 && g.F.capital[f] === p ? 10 : 0);
 }
 /** Crecimiento por turno de una provincia (infantería). @param {Geo} geo @param {Game} g @param {number} p @param {boolean[]} sup */
-export function growth(geo, g, p, sup) {
-  const f = g.P.owner[p]; if (f < 0 || f === rebels(g)) return 0;
-  if (!sup[p] || g.P.loyal[p] < 30 || effectOn(g, p, 'sequia') || effectOn(g, p, 'riada')) return 0;
+export const growth = (geo, g, p, sup) => growthParts(geo, g, p, sup, false).total;
+/** Crecimiento con su desglose. @param {Geo} geo @param {Game} g @param {number} p @param {boolean[]} sup @param {boolean} [why] @returns {Parts} */
+export function growthParts(geo, g, p, sup, why = true) {
+  /** @type {[string, string][]} */ const L = [];
+  const add = (/** @type {string} */ n, /** @type {number} */ v) => { if (why && v) L.push([n, (v > 0 ? '+' : '−') + Math.abs(v)]); return v; };
+  const f = g.P.owner[p]; if (f < 0 || f === rebels(g)) return {lines:L, total:0};
+  const stop = !sup[p] ? 'Sin suministro' : g.P.loyal[p] < 30 ? 'Poco leal' : effectOn(g, p, 'sequia') ? 'Sequía' : effectOn(g, p, 'riada') ? 'Riada' : '';
+  if (stop) { if (why) L.push([stop, 'no crece']); return {lines:L, total:0}; }
   const sp = geo.spec[p];
-  let v = 1 + (geo.tier[p] >= 4 ? 1 : 0) + lvl(g, p, 'cuartel') + lvl(g, p, 'granja') + (g.F.capital[f] === p ? 1 : 0) + (sp === 'cereal' || sp === 'huerta' ? 1 : 0);
-  if (g.rules.seasons && season(g) === 3 && geo.terrain[p] !== 'l') v -= 1;
-  return Math.max(0, v);
+  let v = add('Base', 1) + add('Población grande', geo.tier[p] >= 4 ? 1 : 0) + add('Cuartel', lvl(g, p, 'cuartel')) + add('Granja', lvl(g, p, 'granja'))
+    + add('Capital', g.F.capital[f] === p ? 1 : 0) + add(sp === 'huerta' ? 'Huerta' : 'Cereal', sp === 'cereal' || sp === 'huerta' ? 1 : 0)
+    + add('Rotación de cultivos', knows(g, f, 'rotacion') && lvl(g, p, 'granja') > 0 ? 1 : 0);
+  if (g.rules.seasons && season(g) === 3 && geo.terrain[p] !== 'l') v += add('Invierno en la sierra', -1);
+  return {lines:L, total:Math.max(0, v)};
 }
 /** Alcance de movimiento desde una provincia. @param {Game} g @param {number} f @param {number} from */
 export function moveRange(g, f, from) {
@@ -492,6 +524,7 @@ export function reachable(geo, g, f, from) {
 export function buildCost(geo, g, f, p, b) {
   const info = BUILDINGS[/** @type {import('./rules.js').Building} */ (b)]; if (!info) return 9999;
   let c = info.cost * (lvl(g, p, b) + 1);
+  if (knows(g, f, 'mamposteria')) c = c * 90 / 100;
   if (g.F.trait[f] === 'constructor') c = c * 70 / 100;
   if (minister(g, f, 'hacienda', 'constructor')) c = c * 85 / 100;
   if (geo.spec[p] === 'industria' || geo.spec[p] === 'madera') c = c * 80 / 100;
@@ -509,13 +542,43 @@ export function unitCost(geo, g, f, p, t) {
   }
   return Math.max(1, c);
 }
-/** Coste de una mejora. @param {Game} g @param {number} f @param {number} lv nivel actual */
-export function techCost(g, f, lv) {
-  let disc = 0;
-  for (let p = 0; p < g.P.owner.length; p++) if (g.P.owner[p] === f) disc += 10 * lvl(g, p, 'universidad');
-  if (hasWonder(g, f, 'salamanca')) disc += 25;
-  return Math.floor(COST.tech[lv] * (100 - Math.min(50, disc)) / 100);
+/** Puntos de saber que cuesta un saber. @param {Game} g @param {number} f @param {string} k */
+export function saberCost(g, f, k) {
+  const x = SABER[k]; if (!x) return 9999;
+  return Math.floor(x.cost * (hasWonder(g, f, 'salamanca') ? 75 : 100) / 100);
 }
+/** Oro que falta para aprender un saber ahora (0 si basta con el saber acumulado). @param {Game} g @param {number} f @param {string} k */
+export const saberGold = (g, f, k) => Math.max(0, saberCost(g, f, k) - g.F.rp[f]) * GOLD_PER_SABER;
+/** Si se puede aprender (ya, o cuando haya saber u oro). @param {Game} g @param {number} f @param {string} k @returns {{ok:boolean, why:string}} */
+export function saberOpen(g, f, k) {
+  const x = SABER[k];
+  if (!x) return {ok:false, why:'No existe'};
+  if (knows(g, f, k)) return {ok:false, why:'Ya lo conoces'};
+  const miss = x.req.filter(r => !knows(g, f, r));
+  if (miss.length) return {ok:false, why:'Requiere ' + miss.map(r => SABER[r].name).join(' y ')};
+  if (era(g, f) < x.era) return {ok:false, why:x.era === 2 ? 'Llega con la era Moderna' : 'Llega con el Renacimiento'};
+  return {ok:true, why:''};
+}
+/** Saber que gana un bando por turno. @param {Geo} geo @param {Game} g @param {number} f */
+export function saberGain(geo, g, f) {
+  let v = 2, n = 0;
+  for (let p = 0; p < geo.n; p++) if (g.P.owner[p] === f) { n++; v += 2 * lvl(g, p, 'universidad'); }
+  v += Math.floor(n / 4);
+  if (knows(g, f, 'imprenta')) v += 3;
+  if (hasWonder(g, f, 'salamanca')) v += 3;
+  return v;
+}
+/** Aprende un saber (sube su rama y, si toca, la era). @param {Game} g @param {number} f @param {string} k */
+function learn(g, f, k) {
+  const before = era(g, f), x = SABER[k];
+  g.F.know[f].push(k);
+  if (x.br >= 0) g.F.tech[f][x.br] = Math.min(3, g.F.tech[f][x.br] + 1);
+  emit(g, {t:'tech', f, k, lvl:g.F.know[f].length});
+  if (era(g, f) > before) emit(g, {t:'era', f, era:era(g, f)});
+}
+/** @param {Game} g @param {number} f */
+/** Tropas por barco. @param {Game} g @param {number} f */
+export const shipCap = (g, f) => SHIP_CAP + (knows(g, f, 'navegacion') ? 2 : 0);
 /** @param {Game} g @param {number} f */
 export const shipCost = (g, f) => Math.floor(SHIP_COST * (hasWonder(g, f, 'belem') ? 60 : 100) / 100);
 /** @param {Game} g @param {number} f @param {string} kind @param {number} [p] */
@@ -555,20 +618,40 @@ export function attackMul(geo, g, f, from, to, gen = true) {
  * Multiplicador de defensa (porcentaje). Con `from` cuenta el río; con `f`, la brecha de su asedio.
  * @param {Geo} geo @param {Game} g @param {number} p @param {number} [from] @param {number} [f]
  */
-export function defenseMul(geo, g, p, from = -1, f = -1) {
+export const defenseMul = (geo, g, p, from = -1, f = -1) => defenseParts(geo, g, p, from, f, false).total;
+/** Defensa con su desglose (en puntos de porcentaje). @param {Geo} geo @param {Game} g @param {number} p @param {number} [from] @param {number} [f] @param {boolean} [why] @returns {Parts} */
+export function defenseParts(geo, g, p, from = -1, f = -1, why = true) {
+  /** @type {[string, string][]} */ const L = [];
+  const add = (/** @type {string} */ n, /** @type {number} */ v) => { if (why && v) L.push([n, (v > 0 ? '+' : '−') + Math.abs(v) + ' %']); return v; };
   const d = g.P.owner[p];
-  let m = 100 + TERRAIN_DEF[geo.terrain[p]] + 25 * lvl(g, p, 'fortaleza') + 10 * lvl(g, p, 'torre')
-    + 30 * Math.max(0, lvl(g, p, 'muralla') - (f >= 0 ? breach(g, f, p) : 0))
-    + (from >= 0 && riverBetween(geo, from, p) ? RIVER_DEF : 0);
+  let m = 100 + add('Terreno', TERRAIN_DEF[geo.terrain[p]]) + add('Fortaleza', 25 * lvl(g, p, 'fortaleza')) + add('Torre de vigía', 10 * lvl(g, p, 'torre'))
+    + add('Murallas', 30 * Math.max(0, lvl(g, p, 'muralla') - (f >= 0 ? breach(g, f, p) : 0)))
+    + add('Río', from >= 0 && riverBetween(geo, from, p) ? RIVER_DEF : 0);
   if (d >= 0 && d !== rebels(g)) {
-    m += g.F.morale[d] - 100 - Math.floor(g.F.weary[d] / 5);
-    if (g.F.capital[d] === p) m += 20 + (hasWonder(g, d, 'murallas') ? 30 : 0);
-    if (g.F.trait[d] === 'guardian') m += 15;
-    if (hasWonder(g, d, 'alhambra')) m += 10;
+    m += add('Moral', g.F.morale[d] - 100) + add('Cansancio de guerra', -Math.floor(g.F.weary[d] / 5));
+    if (g.F.capital[d] === p) m += add('Capital', 20) + add('Murallas de Ávila', hasWonder(g, d, 'murallas') ? 30 : 0);
+    if (g.F.trait[d] === 'guardian') m += add('Líder guardián', 15);
+    if (hasWonder(g, d, 'alhambra')) m += add('La Alhambra', 10);
+    if (knows(g, d, 'abaluartada') && (lvl(g, p, 'muralla') > 0 || lvl(g, p, 'fortaleza') > 0)) m += add('Fortificación abaluartada', 15);
   }
   const gn = generalAt(g, p);
-  if (gn && gn.f === d && hasSkill(gn, 'defensa')) m += 20 + 5 * gn.lvl;
-  return Math.max(20, m);
+  if (gn && gn.f === d && hasSkill(gn, 'defensa')) m += add('General ' + gn.name, 20 + 5 * gn.lvl);
+  return {lines:L, total:Math.max(20, m)};
+}
+/**
+ * Cambio de lealtad por turno con su desglose.
+ * @param {Geo} geo @param {Game} g @param {number} p @param {boolean} [why] @returns {Parts}
+ */
+export function loyaltyParts(geo, g, p, why = true) {
+  /** @type {[string, string][]} */ const L = [];
+  const add = (/** @type {string} */ n, /** @type {number} */ v) => { if (why && v) L.push([n, (v > 0 ? '+' : '−') + Math.abs(v)]); return v; };
+  const f = g.P.owner[p]; if (f < 0 || f === rebels(g)) return {lines:L, total:0};
+  let up = add('Calma', 5) + add('Guarnición de 5 o más', g.P.troops[p] >= 5 ? 5 : 0) + add('Líder guardián', g.F.trait[f] === 'guardian' ? 5 : 0)
+    + add('Catedral', 5 * lvl(g, p, 'catedral')) + add('La Mezquita', hasWonder(g, f, 'mezquita') ? 3 : 0);
+  up += add('Impuestos ' + TAXES[g.P.tax[p] ?? 1].name.toLowerCase(), /** @type {number} */ ([4, 0, minister(g, f, 'hacienda', 'austero') ? -3 : -6][g.P.tax[p] ?? 1]));
+  up += add('Otra cultura', g.P.cult[p] !== g.F.cult[f] ? -3 : 0) + add('Cansancio de guerra', -Math.floor(g.F.weary[f] / 25)) + add('Ilustración', knows(g, f, 'ilustracion') ? 2 : 0);
+  if (g.gens.some(x => x.f === f && x.skills.includes('carisma') && (x.p === p || geo.adj[p].includes(x.p)))) up += add('General con carisma', 10);
+  return {lines:L, total:up};
 }
 /**
  * Efecto de la táctica del atacante frente a la postura del defensor.
@@ -593,13 +676,14 @@ export function battleOdds(geo, g, f, from, to, vec, o = {}) {
   const gn = generalAt(g, from), withGen = !!(gn && gn.f === f && o.gen !== false);
   const terr = geo.terrain[to], fort = fortified(g, to);
   let raw = 0;
-  for (let t = 0; t < 3; t++) raw += vec[t] * unitAttack(t, terr, fort) * (t === CAB && withGen && hasSkill(gn, 'jinete') ? 120 : 100) / 100;
+  for (let t = 0; t < 3; t++) raw += vec[t] * unitAttack(t, terr, fort) * (100 + (t === CAB && withGen && hasSkill(gn, 'jinete') ? 20 : 0) + (t === CAB && knows(g, f, 'estribo') ? 15 : 0) + (t === INF && knows(g, f, 'tercios') ? 10 : 0)) / 100;
   const tm = tacticMod(g, o.tac ?? 0, to, vec, withGen ? gn : undefined);
-  const mA = Math.max(20, attackMul(geo, g, f, from, to, withGen) + tm.att - (o.naval ? 20 : 0));
+  const mA = Math.max(20, attackMul(geo, g, f, from, to, withGen) + tm.att - (o.naval ? (knows(g, f, 'navegacion') ? 10 : 20) : 0));
   const mD = defenseMul(geo, g, to, o.naval ? -1 : from, f);
   const du = g.P.u[to];
   let draw = 0;
-  for (let t = 0; t < 4; t++) draw += du[t] * UNITS[t].def;
+  const dOwn = g.P.owner[to];
+  for (let t = 0; t < 4; t++) draw += du[t] * UNITS[t].def * (t === INF && knows(g, dOwn, 'tercios') ? 110 : 100) / 100;
   const SA = Math.floor(raw) * mA, SD = draw * mD, D = g.P.troops[to];
   return {p:D <= 0 ? 1 : winProb(SA, SD).p, SA, SD, mA, mD, D, tm, withGen, gn};
 }
@@ -648,7 +732,7 @@ function hireFree(g, f, p, skill, rng = g.rng) {
   const name = GIVEN[int(rng, GIVEN.length)] + ' ' + EPITHET[int(rng, EPITHET.length)];
   /** @type {General} */
   const gen = {id:++g.genSeq, f, p, name, skills:[/** @type {any} */ (skill)], xp:0, lvl:0, age:0, pend:0};
-  if (hasWonder(g, f, 'escorial')) { gen.lvl = 1; gen.xp = GEN_XP[1]; gen.pend = 1; }
+  if (hasWonder(g, f, 'escorial') || knows(g, f, 'academias')) { gen.lvl = 1; gen.xp = GEN_XP[1]; gen.pend = 1; }
   g.gens.push(gen);
   if (gen.pend && !g.humans.includes(f)) autoSkill(g, gen, rng);
   return gen;
@@ -672,7 +756,7 @@ function gainXp(g, gen, rng) {
   }
 }
 /** Máximo de generales de un bando. @param {Game} g @param {number} f */
-export const maxGenerals = (g, f) => COST.maxGenerals + (hasWonder(g, f, 'escorial') ? 1 : 0);
+export const maxGenerals = (g, f) => COST.maxGenerals + (hasWonder(g, f, 'escorial') ? 1 : 0) + (knows(g, f, 'academias') ? 1 : 0);
 
 /* ======================= Acciones ======================= */
 /**
@@ -775,13 +859,11 @@ export function doAction(geo, g, a) {
       break;
     }
     case 'research': {
-      const k = TECHS.indexOf(a.k), lv = g.F.tech[f]?.[k];
-      need(k >= 0 && lv < 3, 'Ya está al máximo');
-      const price = techCost(g, f, lv), before = era(g, f);
-      need(g.F.gold[f] >= price, 'No hay oro suficiente');
-      g.F.gold[f] -= price; g.F.tech[f][k]++;
-      emit(g, {t:'tech', f, k:a.k, lvl:lv + 1});
-      if (era(g, f) > before) emit(g, {t:'era', f, era:era(g, f)});
+      const o = saberOpen(g, f, a.k); need(o.ok, o.why);
+      const cost = saberCost(g, f, a.k), gold = saberGold(g, f, a.k);
+      need(g.F.gold[f] >= gold, `Faltan ${gold - g.F.gold[f]} de oro (o más saber)`);
+      g.F.gold[f] -= gold; g.F.rp[f] = Math.max(0, g.F.rp[f] - cost);
+      learn(g, f, a.k);
       break;
     }
     case 'hire': {
@@ -881,7 +963,7 @@ function attack(geo, g, a, naval) {
   const n = v[0] + v[1] + v[2];
   v[MIL] = 0;
   need(n >= 1 && n <= P.ready[from] && n <= P.troops[from] - 1 && v.every((x, t) => x <= P.u[from][t]), 'No hay tropas suficientes (al menos 1 se queda; la milicia no ataca)');
-  if (naval) need(n <= g.F.ships[f] * SHIP_CAP, `Tus barcos llevan ${g.F.ships[f] * SHIP_CAP} tropas`);
+  if (naval) need(n <= g.F.ships[f] * shipCap(g, f), `Tus barcos llevan ${g.F.ships[f] * shipCap(g, f)} tropas`);
   if (a.x) need(P.owner[to] === a.x[0] && P.troops[to] === a.x[1], 'La provincia cambió antes de tu ataque');
   const d = d0, rng = rngFor(g, a), tac = Number.isInteger(a.tac) ? a.tac : 0;
   if (d !== R && g.st[f][d] !== WAR) declareWar(g, f, d, 'ataque');
@@ -902,9 +984,11 @@ function attack(geo, g, a, naval) {
     // bajas: hospitales, veteranos, persecución de la caballería y contraataque al asedio
     let aMul = o.tm.loss * (100 - 15 * lvl(g, from, 'hospital')) / 100;
     if (withGen && hasSkill(gn, 'veterano')) aMul = aMul * 75 / 100;
+    if (knows(g, f, 'medicina')) aMul = aMul * 80 / 100;
     const dg = generalAt(g, to);
     let dMul = 100 - 15 * lvl(g, to, 'hospital');
     if (dg && dg.f === d && hasSkill(dg, 'veterano')) dMul = dMul * 75 / 100;
+    if (knows(g, d, 'medicina')) dMul = dMul * 80 / 100;
     if (won) {
       const pursuit = 100 - Math.floor(v[CAB] * 25 / Math.max(1, n));
       attLoss = Math.min(n - 1, Math.floor(D * r * 70 / 10000 * aMul / 100 * pursuit / 100)); defLoss = D;
@@ -982,6 +1066,8 @@ function transfer(g, p, to, keepTroops) {
   g.sieges = g.sieges.filter(s => s.p !== p);
 }
 
+/** Saberes de d que f podría aprender ya. @param {Game} g @param {number} f @param {number} d */
+export const stealable = (g, f, d) => (g.F.know[d] || []).filter(k => saberOpen(g, f, k).ok);
 /** @param {Geo} geo @param {Game} g @param {any} a */
 function spy(geo, g, a) {
   const f = a.f, d = g.P.owner[a.p], kind = a.kind;
@@ -991,7 +1077,7 @@ function spy(geo, g, a) {
   need(g.F.gold[f] >= price, 'No hay oro suficiente');
   if (kind === 'sabotear') need(buildingsAt(g, a.p).length > 0, 'No tiene edificios');
   if (kind === 'asesinar') need(!!generalAt(g, a.p), 'No hay ningún general allí');
-  if (kind === 'robar') need(d < rebels(g) && g.F.tech[d].some((l, k) => l > g.F.tech[f][k]), 'No sabe nada que tú no sepas');
+  if (kind === 'robar') need(d < rebels(g) && stealable(g, f, d).length > 0, 'No sabe nada que tú puedas aprender');
   if (kind === 'sobornar') need(g.P.loyal[a.p] < 40 && g.F.capital[d] !== a.p, 'Solo provincias poco leales (menos de 40) y que no sean capital');
   g.F.gold[f] -= price;
   const rng = rngFor(g, a), ok = int(rng, 100) < spyChance(g, f, kind);
@@ -1000,7 +1086,7 @@ function spy(geo, g, a) {
     if (kind === 'sabotear') { const [b, l] = buildingsAt(g, a.p).sort((x, y) => y[1] - x[1] || (x[0] < y[0] ? -1 : 1))[0]; g.P.bld[a.p] = {...g.P.bld[a.p], [b]:l - 1}; }
     if (kind === 'agitar') g.P.loyal[a.p] = Math.max(0, g.P.loyal[a.p] - 30);
     if (kind === 'asesinar') g.gens = g.gens.filter(x => x.p !== a.p);
-    if (kind === 'robar') { const k = g.F.tech[d].findIndex((l, i) => l > g.F.tech[f][i]); g.F.tech[f][k]++; }
+    if (kind === 'robar') learn(g, f, stealable(g, f, d)[0]);
     if (kind === 'sobornar') { transfer(g, a.p, f, true); if (d < rebels(g) && !g.P.owner.includes(d)) eliminate(g, d, f); }
   } else if (d !== rebels(g)) relAdd(g, f, d, kind === 'asesinar' || kind === 'sobornar' ? -35 : -20);
   emit(g, {t:'spy', f, d, p:a.p, kind, ok});
@@ -1155,7 +1241,7 @@ export function applyDecision(geo, g, d, opt, rng) {
       break;
     case 'cosecha': if (opt === 0) gold(40); else if (own) addUnits(g, p, INF, 4); break;
     case 'mercaderes':
-      if (opt === 0 && g.F.gold[f] >= 60) { const k = g.F.tech[f].indexOf(Math.min(...g.F.tech[f])); if (g.F.tech[f][k] < 3) { gold(-60); g.F.tech[f][k]++; } }
+      if (opt === 0 && g.F.gold[f] >= 60) { const k = SABERES.filter(x => saberOpen(g, f, x.k).ok).sort((a, b) => a.cost - b.cost)[0]; if (k) { gold(-60); learn(g, f, k.k); } }
       else gold(25);
       break;
     case 'refugiados': if (opt === 0 && own) { addUnits(g, p, MIL, 5); loyal(p, -10); } break;
@@ -1169,7 +1255,7 @@ export function applyDecision(geo, g, d, opt, rng) {
       if (opt === 0 && own && geo.terrain[p] !== 'l' && lvl(g, p, 'mina') < 3 && (lvl(g, p, 'mina') > 0 || buildingsAt(g, p).length < slots(geo, g, p))) P.bld[p] = {...P.bld[p], mina:lvl(g, p, 'mina') + 1};
       else gold(opt === 0 ? 30 : 50);
       break;
-    case 'epidemia': if (opt === 0) { if (own) g.fx.push({kind:'cuarentena', p, f, until:g.turn + 2}); } else if (own) removeTroops(g, p, Math.floor(P.troops[p] * 30 / 100)); break;
+    case 'epidemia': if (opt === 0) { if (own) g.fx.push({kind:'cuarentena', p, f, until:g.turn + 2}); } else if (own && !knows(g, f, 'medicina')) removeTroops(g, p, Math.floor(P.troops[p] * 30 / 100)); break;
     case 'artistas': if (opt === 0 && g.F.gold[f] >= 40) { gold(-40); g.F.morale[f] = clamp(g.F.morale[f] + 10, 50, 200); } break;
     case 'desertor':
       if (opt === 0 && capi >= 0 && generalsOf(g, f).length < maxGenerals(g, f) && !generalAt(g, capi)) hireFree(g, f, capi, 'tactico', rng);

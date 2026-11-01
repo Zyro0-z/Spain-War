@@ -23,11 +23,39 @@ const iso = (/** @type {{plate:string}} */ p) => 'ES-' + (p.plate === 'OU' ? 'OR
 const COMMUNITY = {'ES-M':'ES-MD', 'ES-O':'ES-AS', 'ES-S':'ES-CB', 'ES-LO':'ES-RI', 'ES-MU':'ES-MC', 'ES-NA':'ES-NC'};
 const FREE = /public domain|^pd|cc0|cc[- ]by(-sa)?|cc-by|attribution/i;
 
+const sleep = (/** @type {number} */ ms) => new Promise(r => setTimeout(r, ms));
+/**
+ * Petición con reintentos: Wikimedia limita la frecuencia (429) y a veces falla (5xx); se espera cada vez más.
+ * @param {string} url @param {'json'|'text'} as
+ */
+async function get(url, as) {
+  for (let i = 0; i < 7; i++) {
+    let r;
+    try { r = await fetch(url, {headers:{'user-agent':UA, accept:as === 'json' ? 'application/json' : '*/*'}}); } catch (e) { await sleep(1500 * 2 ** i); continue; }
+    if (r.ok) return as === 'json' ? r.json() : r.text();
+    if (r.status === 429 || r.status >= 500) { const ra = +(r.headers.get('retry-after') || 0); await sleep(Math.max(ra * 1000, 1500 * 2 ** i)); continue; }
+    throw new Error(`${url}: ${r.status}`);
+  }
+  throw new Error(`${url}: sin respuesta tras varios intentos`);
+}
 /** @param {string} url */
-async function json(url) {
-  const r = await fetch(url, {headers:{'user-agent':UA, accept:'application/json'}});
-  if (!r.ok) throw new Error(`${url}: ${r.status}`);
-  return r.json();
+const json = url => get(url, 'json');
+const norm = (/** @type {string} */ s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+/**
+ * Si Wikidata no la tiene: busca en Commons «Bandera/Flag … provincia de NOMBRE».
+ * @param {string} name @returns {Promise<string>}
+ */
+async function searchFlag(name) {
+  const short = name.split('/')[0].trim();
+  for (const q of [`Flag of the province of ${short}`, `Bandera de la provincia de ${short}`, `Flag of ${short}`, `Bandera de ${short}`]) {
+    const d = await json('https://commons.wikimedia.org/w/api.php?action=query&format=json&list=search&srnamespace=6&srlimit=12&srsearch=' + encodeURIComponent(q));
+    const hit = (d.query?.search || []).map((/** @type {{title:string}} */ x) => x.title.replace(/^File:/, ''))
+      .filter((/** @type {string} */ t) => /\.svg$/i.test(t) && /(flag|bandera|bandeira|bandiera)/i.test(t) && norm(t).includes(norm(short)) && !/(coat|escudo|map|mapa|locator|old|antigua|historic)/i.test(t))
+      .sort((/** @type {string} */ a, /** @type {string} */ b) => (/(provinc)/i.test(b) ? 1 : 0) - (/(provinc)/i.test(a) ? 1 : 0))[0];
+    if (hit) return hit;
+    await sleep(800);
+  }
+  return '';
 }
 /** Banderas de Wikidata por código ISO. */
 async function wikidataFlags() {
@@ -59,18 +87,29 @@ async function main() {
   const {chromium} = require('playwright');
   const browser = await chromium.launch();
   const page = await browser.newPage({viewport:{width:360, height:240}, deviceScaleFactor:1});
+  // lo ya descargado se conserva (se puede relanzar las veces que haga falta)
+  const mfile = path.join(ROOT, 'data/flags.json');
   /** @type {Record<string, {file:string, license:string, artist:string, source:string}>} */
-  const manifest = {};
+  const manifest = fs.existsSync(mfile) ? JSON.parse(fs.readFileSync(mfile, 'utf8')) : {};
   const missing = [];
   for (const p of map.provinces) {
-    const code = iso(p), file = flags[code] || flags[COMMUNITY[code]];
-    if (!file) { missing.push(`${p.name} (sin bandera en Wikidata)`); continue; }
-    let info;
-    try { info = await commonsInfo(file); } catch (e) { missing.push(`${p.name}: ${e}`); continue; }
-    if (!FREE.test(info.license)) { missing.push(`${p.name}: licencia «${info.license}»`); continue; }
-    const r = await fetch(info.url, {headers:{'user-agent':UA}});
-    if (!r.ok) { missing.push(`${p.name}: descarga ${r.status}`); continue; }
-    const svg = await r.text();
+    if (manifest[p.ine] && fs.existsSync(path.join(OUT, `${p.ine}.png`))) continue;
+    const code = iso(p);
+    let file = flags[code] || flags[COMMUNITY[code]] || '';
+    let info = null;
+    for (const cand of [file, '']) {
+      try {
+        const f = cand || await searchFlag(p.name);
+        if (!f) break;
+        const i = await commonsInfo(f);
+        if (!FREE.test(i.license)) { missing.push(`${p.name}: licencia «${i.license}» (${f})`); if (cand) continue; break; }
+        file = f; info = i; break;
+      } catch (e) { missing.push(`${p.name}: ${e}`); if (!cand) break; }
+    }
+    if (!info) { if (!missing.some(m => m.startsWith(p.name))) missing.push(`${p.name}: sin bandera`); continue; }
+    let svg;
+    try { svg = await get(info.url, 'text'); } catch (e) { missing.push(`${p.name}: descarga ${e}`); continue; }
+    await sleep(700);
     // Se rasteriza a 360×240 dentro de un contenedor 3:2 (la tela de la app recorta igual en todas)
     await page.setContent(`<body style="margin:0;background:transparent"><img id="f" src="data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}" style="width:360px;height:240px;object-fit:cover;display:block"></body>`);
     await page.waitForFunction(() => /** @type {HTMLImageElement} */ (document.getElementById('f')).complete);
@@ -79,7 +118,7 @@ async function main() {
     console.log(p.name, '→', file, '·', info.license);
   }
   await browser.close();
-  fs.writeFileSync(path.join(ROOT, 'data/flags.json'), JSON.stringify(manifest, null, 1));
+  fs.writeFileSync(mfile, JSON.stringify(manifest, null, 1));
   // Tabla de créditos
   const rows = map.provinces.filter(p => manifest[p.ine]).map(p => { const m = manifest[p.ine]; return `| ${p.name} | [${m.file}](${m.source}) | ${m.artist || '—'} | ${m.license} |`; });
   const cred = path.join(ROOT, 'CREDITS.md'), txt = fs.readFileSync(cred, 'utf8').replace(/\n## Banderas[\s\S]*$/, '');
