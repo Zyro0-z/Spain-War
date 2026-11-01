@@ -8,6 +8,13 @@ const NS = 'http://www.w3.org/2000/svg';
 /** @param {string} tag @param {Record<string, string|number>} [attrs] */
 function el(tag, attrs = {}) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, String(attrs[k])); return e; }
 const CASTLE = 'M-7 3V-5h2.4v2h1.8v-2h2.8v2h1.8v-2H7V3Z M-2 3V0a2 2 0 0 1 4 0v3Z';
+/** Pictogramas de los edificios (trazo, caja de 12×12 centrada). */
+export const BUILDING_ICON = {
+  fortaleza:'M-4.5 4.5V-2h-1v-3h2v1.2h1.4V-5h4.2v1.2h1.4V-5h2v3h-1v6.5Z M-1.3 4.5V2a1.3 1.3 0 0 1 2.6 0v2.5',
+  cuartel:'M-4.5-4.5 3.5 3.5M4.5-4.5-3.5 3.5M-5.2 2.2l3 3M5.2 2.2l-3 3',
+  puerto:'M0-3.2V4.8M-2.8-1.6h5.6M-4.6 1.4a4.6 4.6 0 0 0 9.2 0M0-5.6a1.2 1.2 0 1 1 0 2.4a1.2 1.2 0 1 1 0-2.4',
+  mercado:'M0-5V4.6M-4.8-3.4h9.6M-4.8-3.4-6.6 1h3.6ZM4.8-3.4 3 1h3.6Z M-2.6 4.6h5.2',
+};
 
 export class Overlay {
   /** @param {SVGSVGElement} svg @param {import('../map/render.js').MapView} view */
@@ -16,14 +23,17 @@ export class Overlay {
     svg.innerHTML = '';
     svg.appendChild(el('defs')).innerHTML = `
       <linearGradient id="tkShine" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".35"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".25"/></linearGradient>
-      <linearGradient id="tkGold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF1B8"/><stop offset=".5" stop-color="#F2C94C"/><stop offset="1" stop-color="#9A6A10"/></linearGradient>`;
+      <linearGradient id="tkGold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF1B8"/><stop offset=".5" stop-color="#F2C94C"/><stop offset="1" stop-color="#9A6A10"/></linearGradient>
+      <radialGradient id="tkBld" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#5A4520"/><stop offset="1" stop-color="#1E1608"/></radialGradient>`;
     this.gFront = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-front'})));
     this.gMap = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-map'})));
     this.gSmoke = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-smoke'})));
     /** @type {number[]} */ this.smokeAt = [];
     this.gArr = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-arr'})));
     this.gTok = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-tok'})));
-    /** @type {Map<number, {g:SVGGElement, bg:SVGRectElement, txt:SVGTextElement, castle:SVGPathElement, extra:SVGTextElement, flag:SVGGElement, cloth:SVGPathElement}>} */
+    /** Textos que suben (+3, −20 de oro…). */
+    this.gFx = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-fx'})));
+    /** @type {Map<number, {g:SVGGElement, bg:SVGRectElement, txt:SVGTextElement, castle:SVGPathElement, extra:SVGTextElement, flag:SVGGElement, cloth:SVGPathElement, pill:SVGGElement, bld:SVGGElement, bldIcon:SVGPathElement, b:string}>} */
     this.tokens = new Map();
     /** @type {{from:number, to:number, col:string, path:SVGPathElement, under:SVGPathElement, head:SVGPathElement, t0:number, dur:number}[]} */
     this.arrows = [];
@@ -37,23 +47,30 @@ export class Overlay {
     this.gTok.innerHTML = ''; this.tokens.clear();
     for (const p of active) {
       const g = /** @type {SVGGElement} */ (el('g', {class:'tk'}));
-      const castle = /** @type {SVGPathElement} */ (el('path', {d:CASTLE, fill:'url(#tkGold)', stroke:'#3D2604', 'stroke-width':.8, transform:'translate(-23 0.5) scale(.95)', class:'tk-castle'}));
+      const castle = /** @type {SVGPathElement} */ (el('path', {d:CASTLE, fill:'url(#tkGold)', stroke:'#3D2604', 'stroke-width':.8, transform:'translate(-23 6) scale(.95)', class:'tk-castle'}));
       const bg = /** @type {SVGRectElement} */ (el('rect', {x:-15, y:-9, width:30, height:18, rx:9}));
       const shine = el('rect', {x:-15, y:-9, width:30, height:18, rx:9, fill:'url(#tkShine)'});
       const txt = /** @type {SVGTextElement} */ (el('text', {y:4.6, 'text-anchor':'middle'}));
       const extra = /** @type {SVGTextElement} */ (el('text', {x:14, y:-6, 'text-anchor':'middle', class:'tk-x'}));
       // bandera ondeando sobre el castillo de la capital
-      const flag = /** @type {SVGGElement} */ (el('g', {class:'tk-flag', transform:'translate(-23 -4)'}));
-      const cloth = /** @type {SVGPathElement} */ (el('path', {d:'M0.6-13.5h9.4l-2.2 3 2.2 3H0.6Z', class:'cloth', stroke:'rgba(0,0,0,.45)', 'stroke-width':.5}));
-      flag.append(el('path', {d:'M0 0V-14', stroke:'#3D2604', 'stroke-width':1.3, 'stroke-linecap':'round'}), cloth);
-      g.append(flag, castle, bg, shine, txt, extra);
+      const flag = /** @type {SVGGElement} */ (el('g', {class:'tk-flag', transform:'translate(-23 1.5)'}));
+      const cloth = /** @type {SVGPathElement} */ (el('path', {d:'M0.6-11h8.6l-2 2.8 2 2.8H0.6Z', class:'cloth', stroke:'rgba(0,0,0,.45)', 'stroke-width':.5}));
+      flag.append(el('path', {d:'M0 0V-11.5', stroke:'#3D2604', 'stroke-width':1.3, 'stroke-linecap':'round'}), cloth);
+      const pill = /** @type {SVGGElement} */ (el('g', {class:'tk-pill'}));
+      pill.append(bg, shine, txt);
+      // edificio de la provincia: insignia redonda abajo a la derecha
+      const bld = /** @type {SVGGElement} */ (el('g', {class:'tk-b', transform:'translate(17 8)'}));
+      const bldIcon = /** @type {SVGPathElement} */ (el('path', {fill:'none', stroke:'#FFE9A8', 'stroke-width':1.5, 'stroke-linecap':'round', 'stroke-linejoin':'round'}));
+      bld.append(el('circle', {r:7.6, fill:'url(#tkBld)', stroke:'#F2C94C', 'stroke-width':1.1}), bldIcon);
+      bld.style.display = 'none';
+      g.append(flag, castle, pill, bld, extra);
       this.gTok.appendChild(g);
-      this.tokens.set(p, {g, bg, txt, castle, extra, flag, cloth});
+      this.tokens.set(p, {g, bg, txt, castle, extra, flag, cloth, pill, bld, bldIcon, b:''});
     }
   }
   /**
    * Actualiza números y colores.
-   * @param {{owner:number[], troops:(number|null)[], colors:string[], capitals:Set<number>, mine:number, marks?:Map<number, string>}} s
+   * @param {{owner:number[], troops:(number|null)[], colors:string[], capitals:Set<number>, mine:number, marks?:Map<number, string>, bld?:string[]}} s
    */
   update(s) {
     for (const [p, t] of this.tokens) {
@@ -65,6 +82,11 @@ export class Overlay {
       t.castle.style.display = t.flag.style.display = s.capitals.has(p) ? '' : 'none';
       t.cloth.setAttribute('fill', col);
       t.extra.textContent = s.marks?.get(p) || '';
+      const b = s.bld?.[p] || '';
+      if (b !== t.b) {
+        t.b = b; t.bld.style.display = b ? '' : 'none';
+        t.bldIcon.setAttribute('d', BUILDING_ICON[/** @type {'puerto'} */ (b)] || '');
+      }
       t.g.style.display = f < 0 ? 'none' : '';
     }
     this.sync();
@@ -120,6 +142,31 @@ export class Overlay {
     return new Promise(res => setTimeout(() => { this.drop(a); res(); }, a.dur));
   }
   clearArrows() { for (const a of [...this.arrows]) this.drop(a); }
+  /** La ficha de una provincia da un salto (al reclutar, construir…). @param {number} p */
+  pop(p) {
+    const t = this.tokens.get(p); if (!t) return;
+    t.pill.classList.remove('pop'); t.bld.classList.remove('pop'); void t.pill.getBoundingClientRect();
+    t.pill.classList.add('pop'); if (t.b) t.bld.classList.add('pop');
+  }
+  /**
+   * Texto que sube desde la ficha y se desvanece.
+   * @param {number} p @param {string} text @param {'gain'|'cost'|'loss'|'info'} kind @param {number} [delay]
+   */
+  float(p, text, kind, delay = 0) {
+    const t = /** @type {SVGTextElement} */ (el('text', {class:'fx-float ' + kind, 'text-anchor':'middle'}));
+    t.textContent = text; t.style.opacity = '0';
+    this.gFx.appendChild(t);
+    const t0 = performance.now() + delay, dur = 1300;
+    const step = () => {
+      const k = (performance.now() - t0) / dur;
+      if (k < 0) { requestAnimationFrame(step); return; }
+      const [x, y] = this.anchor(p), e = 1 - (1 - Math.min(1, k)) ** 3;
+      t.setAttribute('x', x.toFixed(1)); t.setAttribute('y', (y - 12 - 34 * e).toFixed(1));
+      t.style.opacity = String(k < .15 ? k / .15 : k > .7 ? Math.max(0, (1 - k) / .3) : 1);
+      if (k < 1) requestAnimationFrame(step); else t.remove();
+    };
+    requestAnimationFrame(step);
+  }
   /**
    * Una ficha con n tropas que viaja por la curva de la flecha (mover o atacar).
    * @param {number} from @param {number} to @param {string} col @param {number} n @param {number} dur @param {number} [stop] fracción del camino (0,5 para quedarse en la frontera)

@@ -12,7 +12,7 @@ import {sound, announce, shake, burstAt, celebrate, reduced, haptic} from '../fx
 import {diceRow, roll, markWin} from './dice.js';
 import {$, esc, fmt, pct, toast, openSheet, closeSheet} from './dom.js';
 import {Clock} from './clock.js';
-import {Overlay} from './overlay.js';
+import {Overlay, BUILDING_ICON} from './overlay.js';
 import {enableGestures} from './gestures.js';
 import {borderKey} from '../map/render.js';
 import {needsPortugal} from '../conquest/scenarios.js';
@@ -44,7 +44,16 @@ import {CHAT} from '../net/warroom.js';
  */
 
 const sleep = (/** @type {number} */ ms) => new Promise(r => setTimeout(r, reduced() ? Math.min(ms, 60) : ms));
+/** Iconos de las estaciones (primavera, verano, otoño, invierno). */
+const SEASON_ICON = [
+  '<svg class="sic" viewBox="-8 -8 16 16" aria-hidden="true"><g fill="#F7A6C8">' + [0, 72, 144, 216, 288].map(a => `<ellipse rx="2.6" ry="4" transform="rotate(${a}) translate(0 -3.6)"/>`).join('') + '</g><circle r="2.2" fill="#FFD66E"/></svg>',
+  '<svg class="sic" viewBox="-8 -8 16 16" aria-hidden="true"><g stroke="#FFC24A" stroke-width="1.6" stroke-linecap="round">' + [0, 45, 90, 135, 180, 225, 270, 315].map(a => `<path d="M0-5.2V-7.2" transform="rotate(${a})"/>`).join('') + '</g><circle r="3.6" fill="#FFD66E"/></svg>',
+  '<svg class="sic" viewBox="-8 -8 16 16" aria-hidden="true"><path d="M-5 5C-6-2-1-6 6-6C6 1 2 6-5 5Z" fill="#E8853A"/><path d="M-5 5 3-3" stroke="#8A3E12" stroke-width="1.1" stroke-linecap="round"/></svg>',
+  '<svg class="sic" viewBox="-8 -8 16 16" aria-hidden="true"><g stroke="#CFE8FF" stroke-width="1.5" stroke-linecap="round">' + [0, 60, 120].map(a => `<path d="M0-6.5V6.5M-2-4.6 0-6.5 2-4.6M-2 4.6 0 6.5 2 4.6" transform="rotate(${a})" fill="none"/>`).join('') + '</g></svg>',
+];
 const STATUS_CLS = ['peace', 'war', 'pact', 'ally'];
+/** Pictograma de un edificio en su insignia. @param {string} b */
+const bico = b => `<svg class="bico" viewBox="-8 -8 16 16" aria-hidden="true"><circle r="7.6"/><path d="${BUILDING_ICON[/** @type {'puerto'} */ (b)] || ''}"/></svg>`;
 
 export class Conquest {
   /**
@@ -94,7 +103,7 @@ export class Conquest {
     $('#war').hidden = false;
     $('#ov').style.display = '';
     v.setMap(this.map);
-    v.labelDy = -15; v.me = this.me; v.labels = S.settings.labels;
+    v.labelDy = -19; v.me = this.me; v.labels = S.settings.labels;
     v.focus([], [], 0); v.hop = -1; v.cands = new Set(); v.hot = [];
     v.setColors(g.F.color);
     v.setOwners(g.P.owner, g.F.alive.map(a => !a));
@@ -156,7 +165,7 @@ export class Conquest {
     const caps = new Set(g.F.capital.filter((c, f) => c >= 0 && g.F.alive[f]));
     const marks = new Map();
     for (const gen of g.gens) if (vis.has(gen.p)) marks.set(gen.p, '★');
-    this.overlay.update({owner:g.P.owner, troops:g.P.troops.map((t, p) => vis.has(p) ? t : null), colors:g.F.color, capitals:caps, mine:this.me, marks});
+    this.overlay.update({owner:g.P.owner, troops:g.P.troops.map((t, p) => vis.has(p) ? t : null), colors:g.F.color, capitals:caps, mine:this.me, marks, bld:g.P.bld.map((b, p) => vis.has(p) ? b : '')});
     // frentes de guerra contigo
     const fronts = [];
     for (const [key, d] of Object.entries(this.map.borders)) {
@@ -175,15 +184,34 @@ export class Conquest {
     this.renderHud();
   }
 
+  /**
+   * Se ve lo que acabas de comprar: la ficha salta, sube un texto y, si es algo grande, chispas.
+   * @param {number} p @param {string} text @param {'gain'|'cost'|'loss'|'info'} kind @param {boolean} [sparkle]
+   */
+  feedback(p, text, kind, sparkle = false) {
+    this.overlay.pop(p);
+    this.overlay.float(p, text, kind);
+    if (sparkle) { const [x, y] = this.overlay.anchor(p); burstAt(x, y, '#F2C94C', .7); haptic(12); }
+  }
   /* ======================= Barra superior ======================= */
   renderHud() {
     const g = this.g, me = this.me, inc = me >= 0 ? E.income(this.geo, g, me) : 0;
     const wars = me >= 0 ? g.F.alive.filter((a, f) => a && f !== me && g.st[me][f] === E.WAR && f < E.rebels(g)).length : 0;
     $('#wHud').innerHTML = `
       <button class="icb glass" id="wMenu" aria-label="Menú de la partida">${icon('back')}</button>
-      <div class="stat glass wturn" aria-label="Turno ${g.turn}, ${E.SEASONS[E.season(g)]} del año ${E.year(g)}"><div><span>Turno</span><b class="num">${g.turn}</b></div><i class="sepv"></i><div><span>${E.SEASONS[E.season(g)]}</span><b class="num">Año ${E.year(g)}</b></div></div>
-      ${me >= 0 ? `<button class="stat glass wgold" id="wGold" aria-label="Oro ${g.F.gold[me]}, más ${inc} por turno"><div><span>Oro</span><b class="num">${g.F.gold[me]}</b></div><em class="num">+${inc}</em></button>` : ''}
+      <div class="stat glass wturn" aria-label="Turno ${g.turn}, ${E.SEASONS[E.season(g)]} del año ${E.year(g)}"><div><span>Turno</span><b class="num">${g.turn}</b></div><i class="sepv"></i>${SEASON_ICON[E.season(g)]}<div><span>${E.SEASONS[E.season(g)]}</span><b class="num">Año ${E.year(g)}</b></div></div>
+      ${me >= 0 ? `<button class="stat glass wgold" id="wGold" aria-label="Oro ${g.F.gold[me]}, más ${inc} por turno"><i class="coin" aria-hidden="true"></i><div><span>Oro</span><b class="num">${g.F.gold[me]}</b></div><em class="num">+${inc}</em></button>` : ''}
       <button class="icb glass" id="wDip" aria-label="Diplomacia${wars ? `, ${wars} guerras` : ''}">${icon('flag')}${wars ? `<i class="dot num">${wars}</i>` : ''}</button>`;
+    // el oro cuenta hacia el valor nuevo y deja un «−20» flotando
+    const gb = /** @type {HTMLElement|null} */ ($('#wGold b'));
+    if (gb && me >= 0 && this.goldShown != null && this.goldShown !== g.F.gold[me]) {
+      const from = this.goldShown, to = g.F.gold[me], t0 = performance.now(), d = to - from;
+      const tick = () => { const k = Math.min(1, (performance.now() - t0) / 450); gb.textContent = String(Math.round(from + d * (1 - (1 - k) ** 3))); if (k < 1) requestAnimationFrame(tick); };
+      tick();
+      const fl = document.createElement('span'); fl.className = 'gold-fl ' + (d < 0 ? 'neg' : 'pos'); fl.textContent = (d < 0 ? '−' : '+') + Math.abs(d);
+      /** @type {HTMLElement} */ ($('#wGold')).appendChild(fl); setTimeout(() => fl.remove(), 1300);
+    }
+    this.goldShown = me >= 0 ? g.F.gold[me] : null;
     $('#wMenu').onclick = () => { sound('tap'); this.menuSheet(); };
     $('#wDip').onclick = () => { sound('tap'); this.diplomacySheet(); };
     const gold = $('#wGold'); if (gold) gold.onclick = () => { sound('tap'); this.economySheet(); };
@@ -195,7 +223,7 @@ export class Conquest {
     if (this.sel >= 0) return this.card(this.sel);
     if (this.online && (this.sent || this.watching)) return this.waitBar();
     const mine = E.provincesOf(g, me), troops = mine.reduce((s, p) => s + g.P.troops[p], 0);
-    $('#wBar').innerHTML = `<div class="wpanel glass idle">
+    $('#wBar').innerHTML = `<div class="wpanel glass idle card" style="--fc:${g.F.color[me] || '#6B6F7A'}">
       <div class="wsum">
         ${this.flagOf(me, 'md')}
         <div class="l"><b>${esc(this.fname(me))}</b>${g.motto?.[me] ? `<em class="motto-t">«${esc(g.motto[me])}»</em>` : ''}<small class="num">${mine.length} ${mine.length === 1 ? 'provincia' : 'provincias'} · ${troops} tropas · poder ${g.F.morale[me]}</small></div>
@@ -258,7 +286,7 @@ export class Conquest {
     ];
     const tags = [
       g.F.capital[o] === p ? `<span class="tag2">${icon('crown')}Capital</span>` : '',
-      g.P.bld[p] ? `<span class="tag2">${icon('shield')}${E.BUILDINGS[/** @type {'cuartel'} */ (g.P.bld[p])].name}</span>` : '',
+      g.P.bld[p] ? `<span class="tag2">${bico(g.P.bld[p])}${E.BUILDINGS[/** @type {'cuartel'} */ (g.P.bld[p])].name}</span>` : '',
       gen && vis ? `<span class="tag2">★ ${esc(gen.name)} · ${E.SKILLS[gen.skill].name}${gen.lvl ? ' ' + gen.lvl : ''}</span>` : '',
       mine && !sup[p] ? `<span class="tag2 bad">Sin suministro</span>` : '',
       geo.coast[p] ? `<span class="tag2">Costa</span>` : '',
@@ -280,7 +308,7 @@ export class Conquest {
         ${o < E.rebels(g) ? `<button class="act" id="aDip">${icon('flag')}<span>Diplomacia</span></button>` : ''}
         <button class="act" id="aSpy">${icon('target')}<span>Espiar</span></button>`;
     }
-    $('#wBar').innerHTML = `<div class="wpanel glass card" aria-label="Provincia ${esc(this.pname(p))}">
+    $('#wBar').innerHTML = `<div class="wpanel glass card" style="--fc:${o >= 0 ? g.F.color[o] : '#6B6F7A'}" aria-label="Provincia ${esc(this.pname(p))}">
       <div class="ch">${this.flagOf(o, 'md')}<div class="l"><b>${esc(this.pname(p))}</b><small>${o === me ? 'Tu territorio' : esc(this.fname(o))}</small></div>${chip}<button class="icb x" id="cX" aria-label="Cerrar">${icon('close')}</button></div>
       ${tags ? `<div class="tags">${tags}</div>` : ''}
       <div class="facts">${facts.join('')}</div>
@@ -495,11 +523,11 @@ export class Conquest {
         /** @type {HTMLElement} */ (el.querySelector('#rMin')).onclick = () => { n = Math.max(1, n - 1); r.value = String(n); draw(el); };
         /** @type {HTMLElement} */ (el.querySelector('#rMax')).onclick = () => { n = Math.min(max, n + 1); r.value = String(n); draw(el); };
         /** @type {HTMLElement} */ (el.querySelector('#rGo')).onclick = () => {
-          if (max >= 1 && this.act({type:'recruit', f, p, n}, true)) { sound('lock'); closeSheet(); this.refresh(); this.card(p); }
+          if (max >= 1 && this.act({type:'recruit', f, p, n}, true)) { sound('coin'); closeSheet(); this.refresh(); this.card(p); this.feedback(p, `+${n} tropas`, 'gain'); }
         };
         el.querySelectorAll('[data-sk]').forEach(b => /** @type {HTMLElement} */ (b).onclick = () => {
           const ev = this.act({type:'hire', f, p, skill:/** @type {any} */ (/** @type {HTMLElement} */ (b).dataset.sk)}, true);
-          if (ev) { const h = this.g.gens.find(x => x.p === p); sound('conquer'); closeSheet(); toast(`${h ? h.name : 'Un general'} se une a tu ejército`); this.refresh(); this.card(p); }
+          if (ev) { const h = this.g.gens.find(x => x.p === p); sound('conquer'); closeSheet(); toast(`${h ? h.name : 'Un general'} se une a tu ejército`); this.refresh(); this.card(p); this.feedback(p, '★ General', 'info', true); }
         });
       }});
   }
@@ -510,10 +538,11 @@ export class Conquest {
       <p class="note" style="margin:0 4px 10px">Un edificio por provincia. Tienes ${g.F.gold[f]} de oro.</p>
       <div class="grp">${Object.entries(E.BUILDINGS).map(([k, b]) => {
         const cost = E.buildCost(g, f, /** @type {any} */ (k)), ok = g.F.gold[f] >= cost && (k !== 'puerto' || this.geo.coast[p]);
-        return `<button class="rowi" data-b="${k}" ${ok ? '' : 'disabled'}>${icon('shield')}<div class="l">${b.name}<small>${b.desc}${k === 'puerto' && !this.geo.coast[p] ? ' · necesita costa' : ''}</small></div><b class="num cost">${cost}</b></button>`;
+        return `<button class="rowi" data-b="${k}" ${ok ? '' : 'disabled'}>${bico(k)}<div class="l">${b.name}<small>${b.desc}${k === 'puerto' && !this.geo.coast[p] ? ' · necesita costa' : ''}</small></div><b class="num cost">${cost}</b></button>`;
       }).join('')}</div>`,
       mount:el => el.querySelectorAll('[data-b]').forEach(b => /** @type {HTMLElement} */ (b).onclick = () => {
-        if (this.act({type:'build', f, p, b:/** @type {any} */ (/** @type {HTMLElement} */ (b).dataset.b)}, true)) { sound('lock'); closeSheet(); this.refresh(); this.card(p); }
+        const k = /** @type {'cuartel'} */ (/** @type {HTMLElement} */ (b).dataset.b);
+        if (this.act({type:'build', f, p, b:k}, true)) { sound('build'); closeSheet(); this.refresh(); this.card(p); this.feedback(p, E.BUILDINGS[k].name, 'gain', true); }
       })});
   }
   /** @param {number} p */
@@ -623,7 +652,13 @@ export class Conquest {
       <div class="glabel">Ingresos por provincia</div>
       <div class="grp">${rows.map(r => `<div class="rowi"><div class="l">${esc(this.pname(r.p))}<small>${r.gr ? '+' + r.gr + ' tropas/turno' : 'No crece'}${!sup[r.p] ? ' · sin suministro' : ''}${g.P.loyal[r.p] < 30 ? ' · poco leal' : ''}</small></div><b class="num">+${r.v}</b></div>`).join('')}</div>`,
       mount:el => el.querySelectorAll('[data-t]').forEach(b => /** @type {HTMLElement} */ (b).onclick = () => {
-        if (this.act({type:'research', f:me, k:/** @type {any} */ (/** @type {HTMLElement} */ (b).dataset.t)}, true)) { sound('conquer'); closeSheet(); this.refresh(); setTimeout(() => this.economySheet(), 320); }
+        const k = /** @type {E.Tech} */ (/** @type {HTMLElement} */ (b).dataset.t);
+        if (this.act({type:'research', f:me, k}, true)) {
+          sound('conquer'); closeSheet(); this.refresh();
+          const lvl = this.g.F.tech[me][E.TECHS.indexOf(k)], cap = this.g.F.capital[me];
+          if (cap >= 0) this.feedback(cap, `${E.TECH_INFO[k].name} ${lvl}`, 'info', true);
+          this.banner(`${E.TECH_INFO[k].name} · nivel ${lvl}: ${E.TECH_INFO[k].desc[lvl - 1]}`);
+        }
       })});
   }
   menuSheet() {
@@ -820,6 +855,7 @@ export class Conquest {
     announce(text);
   }
   /** @type {any} */ bannerT;
+  /** @type {number|null|undefined} oro que enseña la barra (para animar el cambio) */ goldShown;
 
   /* ======================= Final ======================= */
   end() {

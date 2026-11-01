@@ -291,9 +291,9 @@ export class MapView {
   /** Borde interior oscuro fino y bisel de luz. @param {CanvasRenderingContext2D} x @param {number} p @param {string} col @param {number} u unidad (1 px de pantalla en vista general) */
   rimProvince(x, p, col, u) {
     if (this.pal().flat) return;
-    x.save(); x.clip(this.paths[p], 'evenodd');
-    x.strokeStyle = alpha(darken(col, .6), .55); x.lineWidth = 2.6 * u; x.stroke(this.paths[p]);
-    x.strokeStyle = alpha(lighten(col, .55), .32); x.lineWidth = 5.2 * u; x.globalCompositeOperation = 'source-atop';
+    x.save(); x.clip(this.paths[p], 'evenodd'); x.lineJoin = 'round'; x.lineCap = 'round';
+    x.strokeStyle = alpha(darken(col, .6), .5); x.lineWidth = 2.2 * u; x.stroke(this.paths[p]);
+    x.strokeStyle = alpha(lighten(col, .55), .28); x.lineWidth = 4 * u; x.globalCompositeOperation = 'source-atop';
     x.translate(-.7 * u, -.9 * u); x.stroke(this.paths[p]);
     x.restore();
   }
@@ -304,9 +304,9 @@ export class MapView {
     boost *= gl;
     for (const q of this.map.provinces[p].adj) if (this.owner[q] !== f) keys.push(borderKey(p, q));
     const outer = this.outerPaths[p];
-    x.save(); x.clip(this.paths[p], 'evenodd');
+    x.save(); x.clip(this.paths[p], 'evenodd'); x.lineJoin = 'round'; x.lineCap = 'round';
     x.globalCompositeOperation = 'lighter';
-    for (const [w, a] of [[9, .07], [4.6, .12], [2, .3]]) {
+    for (const [w, a] of [[6, .06], [3.2, .1], [1.6, .24]]) {
       x.strokeStyle = alpha(lighten(col, .5), a * boost); x.lineWidth = w * u;
       for (const k of keys) { const bp = this.borderPaths.get(k); if (bp) x.stroke(bp); }
     }
@@ -368,7 +368,16 @@ export class MapView {
     x.strokeStyle = alpha('#000000', .18); x.lineWidth = 2.6 * u; x.stroke(this.rivers);
     x.strokeStyle = P.river; x.lineWidth = 1.5 * u; x.stroke(this.rivers);
     x.restore();
-    // líneas de frontera: finas entre provincias del mismo bando, marcadas entre bandos
+    // líneas de frontera y costa
+    this.strokeBorders(x, u, only);
+  }
+  /**
+   * Fronteras (finas y discontinuas dentro de un bando, marcadas entre bandos) y línea de costa. Se pintan en la
+   * imagen en memoria y, con zoom, otra vez en vectorial encima para que sigan nítidas.
+   * @param {CanvasRenderingContext2D} x @param {number} u @param {Set<number>} [only]
+   */
+  strokeBorders(x, u, only) {
+    const P = this.pal();
     x.save(); x.lineJoin = 'round'; x.lineCap = 'round';
     for (const [key, bp] of this.borderPaths) {
       const [a, b] = key.split('-').map(Number), same = this.owner[a] === this.owner[b];
@@ -545,6 +554,8 @@ export class MapView {
       for (const p of this.active) { this.fillProvince(x, p, this.provColor(p)); this.rimProvince(x, p, this.provColor(p), u); this.glowProvince(x, p, u, 1.6); }
       x.restore();
     }
+    // con zoom la imagen en memoria se queda corta: las fronteras se repasan en vectorial (mismo grosor)
+    if (c.s * d > this.cacheK * 1.08 && dim < .5) this.strokeBorders(x, 1 / this.fitScale());
     if (this.me >= 0) this.drawMine(x, u);
     if (this.labels) this.drawLabels(x, dim, d);
   }

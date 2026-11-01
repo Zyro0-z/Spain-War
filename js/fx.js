@@ -120,6 +120,12 @@ export function sound(kind, n = 0) {
       break;
     }
     case 'tap': tone(1200, 0, .04, {vol:.035, type:'triangle'}); break;
+    case 'coin': // monedas que caen
+      for (let i = 0; i < 4; i++) { tone(1900 + i * 140, i * .06, .09, {vol:.05, type:'triangle', wet:true}); burst(i * .06, 5200, .05, .03, {q:14}); }
+      break;
+    case 'build': // martillazos y un acorde
+      [0, .12, .24].forEach(t => { burst(t, 1100, .3, .06, {q:4}); tone(180, t, .08, {vol:.12, glide:.7}); });
+      [523, 659, 784].forEach((f, i) => tone(f, .34 + i * .05, .45, {vol:.05, type:'triangle', wet:true})); break;
     default: burst(0, 3800, .1, .02);
   }
 }

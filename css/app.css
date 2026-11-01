@@ -457,7 +457,7 @@ svg{display:block}
 .act:active{transform:scale(.95)}
 .act:disabled{opacity:.35}
 .act .ic{width:22px;height:22px;color:var(--gold)}
-#aAtt .ic,#aAtt2 .ic{color:var(--red)}
+#aAtt .ic,#aAtt2 .ic{color:#fff}
 .amount .ah{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px}
 .amount .ah b{font:800 22px/1 var(--display);text-transform:uppercase}
 .amount .ah span{color:var(--ink2);font-size:13px}
@@ -690,3 +690,42 @@ details.adv[open] summary::after{content:" −"}
 .bubble .flag{width:34px}
 .bubble b{display:block;font:800 14px/1 var(--display);text-transform:uppercase;letter-spacing:.04em;color:var(--gold)}
 .bubble span{display:block;font-size:14px;margin-top:2px}
+/* Fichas: salto al comprar, insignia del edificio y textos que suben */
+.tk-pill,.tk-b{transform-box:fill-box;transform-origin:center}
+.tk-pill.pop{animation:tkPop .55s var(--bounce)}
+.tk-b.pop{animation:tkPop .7s var(--bounce)}
+@keyframes tkPop{0%{transform:scale(1)}35%{transform:scale(1.38)}100%{transform:scale(1)}}
+.fx-float{font:800 15px/1 var(--display);letter-spacing:.03em;paint-order:stroke;stroke:rgba(0,0,0,.6);stroke-width:3px;fill:#fff;pointer-events:none}
+.fx-float.gain{fill:#7CF0A8}.fx-float.cost{fill:#FFD66E}.fx-float.loss{fill:#FF7A6E}.fx-float.info{fill:#BFE3FF}
+/* Oro que cuenta y deja el cambio flotando */
+.wgold{position:relative;overflow:visible}
+.gold-fl{position:absolute;left:50%;top:100%;transform:translate(-50%,0);font:800 15px/1 var(--display);pointer-events:none;animation:goldFl 1.25s ease-out forwards;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+.gold-fl.neg{color:#FFD66E}.gold-fl.pos{color:#7CF0A8}
+@keyframes goldFl{0%{opacity:0;transform:translate(-50%,-4px)}15%{opacity:1}100%{opacity:0;transform:translate(-50%,18px)}}
+/* ===== Relieve en la interfaz: paneles con luz y grano, botones con volumen, iconos de color ===== */
+.wpanel{position:relative;isolation:isolate;box-shadow:var(--glass-sh),inset 0 1px 0 rgba(255,255,255,.16),inset 0 -1px 0 rgba(0,0,0,.28),inset 0 0 0 1px var(--glass-brd)}
+.wpanel::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-1;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--fc,#ffffff) 26%,transparent) 0%,transparent 42%),radial-gradient(120% 70% at 50% 0%,rgba(255,255,255,.08),transparent 60%)}
+.wpanel::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-1;background-image:var(--grain);background-size:180px;opacity:.06;mix-blend-mode:overlay}
+.card .ch .flag.md{box-shadow:0 6px 14px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.25)}
+.card .ch b{text-shadow:0 2px 0 rgba(0,0,0,.25)}
+.facts div{background:linear-gradient(180deg,rgba(255,255,255,.09),rgba(255,255,255,.02));box-shadow:inset 0 1px 0 rgba(255,255,255,.1),inset 0 0 0 1px var(--glass-brd),0 2px 6px rgba(0,0,0,.15)}
+.act{background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.03));padding:10px 4px 9px;gap:6px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.24),inset 0 0 0 1px var(--glass-brd),0 3px 0 rgba(0,0,0,.3),0 8px 16px rgba(0,0,0,.22);transition:transform .12s,box-shadow .12s}
+.act:active{transform:translateY(2px);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),inset 0 0 0 1px var(--glass-brd),0 1px 0 rgba(0,0,0,.3)}
+.act .ic{width:34px;height:34px;padding:7px;border-radius:50%;color:#fff;background:radial-gradient(circle at 35% 28%,var(--ac2,#F2C94C),var(--ac,#9A6A10) 72%);
+  box-shadow:0 3px 8px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.45),inset 0 -2px 4px rgba(0,0,0,.25)}
+#aAtt,#aAtt2{--ac:#A3211A;--ac2:#FF6E60}#aMove{--ac:#1C569E;--ac2:#69AEFF}#aRec{--ac:#1A6E43;--ac2:#56DD94}#aBld{--ac:#8E600C;--ac2:#F5CF5A}#aDip{--ac:#50379A;--ac2:#B094FF}#aSpy{--ac:#2C3446;--ac2:#8C9DBF}
+.act:disabled .ic{filter:grayscale(1)}
+.hud .stat,.hud .icb{box-shadow:var(--glass-sh),inset 0 1px 0 rgba(255,255,255,.16),inset 0 -1px 0 rgba(0,0,0,.25)}
+.coin{width:22px;height:22px;flex:none;border-radius:50%;background:radial-gradient(circle at 35% 30%,#FFF4C2,#F2C94C 45%,#A9761A 85%);box-shadow:inset 0 0 0 2px rgba(110,74,8,.55),inset 0 0 0 4px rgba(255,236,170,.35),0 2px 4px rgba(0,0,0,.4)}
+.sic{width:20px;height:20px;flex:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))}
+.wpanel .btn{box-shadow:0 4px 0 #8A5A0A,0 10px 22px rgba(242,180,40,.28),inset 0 1px 0 rgba(255,255,255,.6)}
+.wpanel .btn:active{transform:translateY(3px);box-shadow:0 1px 0 #8A5A0A,inset 0 1px 0 rgba(255,255,255,.5)}
+.wpanel .btn.ghost{box-shadow:inset 0 0 0 1px var(--glass-brd),0 3px 0 rgba(0,0,0,.25)}
+.grp{box-shadow:inset 0 1px 0 rgba(255,255,255,.06),inset 0 0 0 1px var(--glass-brd)}
+.tag2{box-shadow:inset 0 1px 0 rgba(255,255,255,.12)}
+.bico{width:30px;height:30px;flex:none;filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))}
+.bico circle{fill:#2A1F0B;stroke:#F2C94C;stroke-width:1.1}
+.bico path{fill:none;stroke:#FFE9A8;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.tag2 .bico{width:18px;height:18px;margin-right:2px}
