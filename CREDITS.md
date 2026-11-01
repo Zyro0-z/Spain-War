@@ -12,6 +12,19 @@
 
 ## Banderas
 
-Cada bando lleva la bandera de su provincia. `npm run flags` (o, en GitHub, Actions › Banderas › Run workflow) toma la bandera de cada provincia de Wikidata (propiedad P41, por su código ISO 3166-2), comprueba en Commons que la licencia sea libre (dominio público, CC0, CC BY o CC BY-SA), la guarda en `data/flags/` y añade aquí autor y licencia de cada una.
+De Wikimedia Commons, rasterizadas a 360×240 con `npm run flags`.
 
-Mientras no estén descargadas, la app muestra una tela provisional con el color del bando y la matrícula.
+| Provincia | Archivo | Autor | Licencia |
+| --- | --- | --- | --- |
+| Álava | [Flag of Álava.svg](https://commons.wikimedia.org/wiki/File:Flag_of_%C3%81lava.svg) | HansenBCN | CC BY-SA 4.0 |
+| Albacete | [Bandera provincia Albacete.svg](https://commons.wikimedia.org/wiki/File:Bandera_provincia_Albacete.svg) | Espanish AlB; SanchoPanzaXXI; HansenBCN | CC BY-SA 4.0 |
+| Almería | [Flag Almería Province.svg](https://commons.wikimedia.org/wiki/File:Flag_Almer%C3%ADa_Province.svg) | Almju | CC BY-SA 4.0 |
+| Ávila | [Bandera de la provincia de Ávila.svg](https://commons.wikimedia.org/wiki/File:Bandera_de_la_provincia_de_%C3%81vila.svg) | Rastrojo (D•ES) | CC BY-SA 4.0 |
+| Badajoz | [Provincia de Badajoz - Bandera.svg](https://commons.wikimedia.org/wiki/File:Provincia_de_Badajoz_-_Bandera.svg) | HansenBCN | CC BY-SA 3.0 |
+| Barcelona | [Flag of Barcelona (province).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Barcelona_(province).svg) | — | CC BY-SA 3.0 |
+| Burgos | [Flag Burgos Province.svg](https://commons.wikimedia.org/wiki/File:Flag_Burgos_Province.svg) | HansenBCN | CC BY-SA 4.0 |
+| Cáceres | [Flag of the province of Cáceres.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_province_of_C%C3%A1ceres.svg) | Ewan ar Born, Rastrojo and Offnfopt | CC BY-SA 3.0 |
+| Cádiz | [Flag Cádiz Province.svg](https://commons.wikimedia.org/wiki/File:Flag_C%C3%A1diz_Province.svg) | Ulaidh | CC BY-SA 4.0 |
+| Ciudad Real | [Flag Ciudad Real Province.svg](https://commons.wikimedia.org/wiki/File:Flag_Ciudad_Real_Province.svg) | Ulaidh | CC BY-SA 4.0 |
+| Córdoba | [Provincia de Córdoba - Bandera.svg](https://commons.wikimedia.org/wiki/File:Provincia_de_C%C3%B3rdoba_-_Bandera.svg) | HansenBCN | CC BY-SA 3.0 |
+| Valladolid | [Bandera de la provincia de Valladolid.svg](https://commons.wikimedia.org/wiki/File:Bandera_de_la_provincia_de_Valladolid.svg) | Original: Vexilla Hispanica. Vectorization: Chabacano | CC BY-SA 3.0 |
