@@ -104,7 +104,7 @@ export function migrate(s) {
     online:on,
     solo:{...f.solo, ...(s.solo || {})},
     war:{...f.war, ...(s.war || {})},
-    saves:Array.isArray(s.saves) ? s.saves.filter((/** @type {any} */ x) => x && x.game && x.game.v === 2 && Array.isArray(x.game.P?.owner)).slice(0, 5) : [],
+    saves:Array.isArray(s.saves) ? s.saves.filter((/** @type {any} */ x) => x && x.game && x.game.v >= 2 && Array.isArray(x.game.P?.owner)).slice(0, 5) : [],
     medals:obj(s.medals), campaign:obj(s.campaign),
     daily:s.daily && typeof s.daily.day === 'string' ? {day:s.daily.day, best:+s.daily.best || 0, plays:+s.daily.plays || 0} : f.daily,
     tutorial:!!s.tutorial,

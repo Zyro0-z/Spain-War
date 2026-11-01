@@ -62,3 +62,31 @@ export const GIVEN = ['Gonzalo', 'Rodrigo', 'Álvaro', 'Beatriz', 'Elvira', 'Í�
   'Pedro', 'Juana', 'Nuño', 'Jimena', 'Fernán', 'Mencía', 'García', 'Teresa', 'Lope', 'Sancha', 'Diego', 'Aldonza'];
 export const EPITHET = ['el Bravo', 'la Leona', 'de Lara', 'de Haro', 'el Prudente', 'la Firme', 'de Castro', 'el Mozo', 'de Mendoza', 'la Audaz',
   'el Viejo', 'de Guzmán', 'el Tuerto', 'la Sabia', 'de Zúñiga', 'el Callado', 'de Velasco', 'la Fiera'];
+
+/** Especialidad económica de cada provincia (simplificada a partir de su actividad real). */
+export const SPECIALTY = {
+  '01':'vino', '02':'ganado', '03':'turismo', '04':'huerta', '05':'ganado', '06':'ganado', '08':'industria', '09':'cereal', '10':'ganado',
+  '11':'pesca', '12':'huerta', '13':'vino', '14':'olivo', '15':'pesca', '16':'madera', '17':'turismo', '18':'turismo', '19':'cereal',
+  '20':'industria', '21':'mineria', '22':'madera', '23':'olivo', '24':'mineria', '25':'huerta', '26':'vino', '27':'ganado', '28':'comercio',
+  '29':'turismo', '30':'huerta', '31':'cereal', '32':'vino', '33':'mineria', '34':'cereal', '36':'pesca', '37':'ganado', '39':'ganado',
+  '40':'cereal', '41':'comercio', '42':'madera', '43':'vino', '44':'ganado', '45':'hierro', '46':'comercio', '47':'cereal', '48':'hierro',
+  '49':'cereal', '50':'industria', PT:'comercio',
+};
+/** Cultura de cada provincia: la de un bando distinto tarda en asimilarse. */
+export const CULTURE = {
+  '15':'gallega', '27':'gallega', '32':'gallega', '36':'gallega', '33':'asturiana', '24':'leonesa', '49':'leonesa', '37':'leonesa',
+  '39':'cántabra', '01':'vasca', '20':'vasca', '48':'vasca', '31':'navarra', '22':'aragonesa', '44':'aragonesa', '50':'aragonesa',
+  '08':'catalana', '17':'catalana', '25':'catalana', '43':'catalana', '03':'valenciana', '12':'valenciana', '46':'valenciana', '30':'murciana',
+  '04':'andaluza', '11':'andaluza', '14':'andaluza', '18':'andaluza', '21':'andaluza', '23':'andaluza', '29':'andaluza', '41':'andaluza',
+  '06':'extremeña', '10':'extremeña', PT:'portuguesa',
+};
+/** @param {string} ine */
+export const culture = ine => /** @type {Record<string, string>} */ (CULTURE)[ine] || 'castellana';
+/** Mares de las provincias con costa (para la flota). Los desembarcos llegan al mismo mar o al vecino. */
+export const SEA = {
+  '33':['cant'], '39':['cant'], '48':['cant'], '20':['cant'], '27':['cant', 'atln'], '15':['atln'], '36':['atln'], PT:['atln', 'atls'],
+  '21':['atls'], '11':['atls', 'alb'], '29':['alb'], '18':['alb'], '04':['alb', 'lev'], '30':['lev'], '03':['lev'], '46':['lev'], '12':['lev', 'cat'],
+  '43':['cat'], '08':['cat'], '17':['cat'],
+};
+export const SEA_NAME = {cant:'Cantábrico', atln:'Atlántico norte', atls:'Golfo de Cádiz', alb:'Alborán', lev:'Levante', cat:'Mar catalán'};
+export const SEA_ADJ = {cant:['atln'], atln:['cant', 'atls'], atls:['atln', 'alb'], alb:['atls', 'lev'], lev:['alb', 'cat'], cat:['lev']};

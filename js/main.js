@@ -12,7 +12,7 @@ import {NormalDriver} from './ui/drivers.js';
 import {renderMenu, hideMenu} from './ui/menu.js';
 import {showWarSetup} from './ui/warsetup.js';
 import {Conquest} from './ui/conquest.js';
-import {geoOf} from './conquest/engine.js';
+import {geoOf, upgradeGame} from './conquest/engine.js';
 import {scenario, withPortugal, needsPortugal} from './conquest/scenarios.js';
 import {newConquest} from './conquest/newgame.js';
 import {MISSIONS, daily, today} from './conquest/campaign.js';
@@ -73,7 +73,7 @@ async function boot() {
 
 function onLook() {
   const v = W.view, st = S.settings;
-  v.theme = st.theme; v.contrast = st.contrast; v.labels = st.labels && $('#menu').hidden;
+  v.theme = st.theme; v.contrast = st.contrast; v.labels = !!st.labels && !!$('#menu').hidden;
   v.rebuild(); v.invalidate();
   $('#fps').hidden = !st.fps;
   war?.syncMusic();
@@ -171,7 +171,7 @@ function startWar(o) {
 function loadWar(id) {
   const x = S.saves.find(s => s.id === id); if (!x) return menu();
   leaveMenu();
-  runWar(x.id, x.game, x.me);
+  runWar(x.id, upgradeGame(geoFor(x.game.scenario), x.game), x.me);
 }
 /** @param {string} id @param {import('./conquest/engine.js').Game} g @param {number} me */
 function runWar(id, g, me) {

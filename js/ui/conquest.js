@@ -24,6 +24,7 @@ import {award} from './medals.js';
 import {MISSIONS, starsFor} from '../conquest/campaign.js';
 import {fillBoard} from './board.js';
 import {CHAT} from '../net/warroom.js';
+import {recruitSheet, buildSheet, governSheet, spySheet, factionSheet, economySheet, govSheet, decisionSheet, skillSheet, provinceDetail, uico} from './warsheets.js';
 
 /** @typedef {import('../conquest/engine.js').Game} Game */
 /** @typedef {import('../conquest/engine.js').Geo} Geo */
@@ -52,6 +53,10 @@ const SEASON_ICON = [
   '<svg class="sic" viewBox="-8 -8 16 16" aria-hidden="true"><g stroke="#CFE8FF" stroke-width="1.5" stroke-linecap="round">' + [0, 60, 120].map(a => `<path d="M0-6.5V6.5M-2-4.6 0-6.5 2-4.6M-2 4.6 0 6.5 2 4.6" transform="rotate(${a})" fill="none"/>`).join('') + '</g></svg>',
 ];
 const STATUS_CLS = ['peace', 'war', 'pact', 'ally'];
+/** Orden en el que se enseña el edificio principal de una provincia en su ficha del mapa. */
+const BLD_ORDER = ['muralla', 'fortaleza', 'astillero', 'universidad', 'catedral', 'puerto', 'mercado', 'cuartel', 'mina', 'hospital', 'torre', 'almacen', 'granja', 'caminos'];
+/** @param {Game} g @param {number} p */
+const mainBuilding = (g, p) => E.buildingsAt(g, p).sort((a, b) => b[1] - a[1] || BLD_ORDER.indexOf(a[0]) - BLD_ORDER.indexOf(b[0]))[0]?.[0] || '';
 /** Pictograma de un edificio en su insignia. @param {string} b */
 const bico = b => `<svg class="bico" viewBox="-8 -8 16 16" aria-hidden="true"><circle r="7.6"/><path d="${BUILDING_ICON[/** @type {'puerto'} */ (b)] || ''}"/></svg>`;
 
@@ -90,6 +95,8 @@ export class Conquest {
   fname(f) { return f >= 0 ? this.g.F.name[f] : 'Sin dueño'; }
   /** @param {number} p */
   pname(p) { return this.map.provinces[p].name; }
+  /** @param {{kind:string, p:number, n:number}} m */
+  missionText(m) { return E.MISSIONS[/** @type {'pacto'} */ (m.kind)].replace('{P}', m.p >= 0 ? this.pname(m.p) : '').replace('{n}', String(m.n)); }
   /** Bandera del bando (la de su provincia de origen). @param {number} f @param {string} [cls] */
   flagOf(f, cls = '') {
     const b = f >= 0 ? this.g.F.banner?.[f] : null;
@@ -165,7 +172,7 @@ export class Conquest {
     const caps = new Set(g.F.capital.filter((c, f) => c >= 0 && g.F.alive[f]));
     const marks = new Map();
     for (const gen of g.gens) if (vis.has(gen.p)) marks.set(gen.p, '★');
-    this.overlay.update({owner:g.P.owner, troops:g.P.troops.map((t, p) => vis.has(p) ? t : null), colors:g.F.color, capitals:caps, mine:this.me, marks, bld:g.P.bld.map((b, p) => vis.has(p) ? b : '')});
+    this.overlay.update({owner:g.P.owner, troops:g.P.troops.map((t, p) => vis.has(p) ? t : null), colors:g.F.color, capitals:caps, mine:this.me, marks, bld:g.P.bld.map((_, p) => vis.has(p) ? mainBuilding(g, p) : '')});
     // frentes de guerra contigo
     const fronts = [];
     for (const [key, d] of Object.entries(this.map.borders)) {
@@ -195,13 +202,15 @@ export class Conquest {
   }
   /* ======================= Barra superior ======================= */
   renderHud() {
-    const g = this.g, me = this.me, inc = me >= 0 ? E.income(this.geo, g, me) : 0;
+    const g = this.g, me = this.me, inc = me >= 0 ? E.treasury(this.geo, g, me).total : 0;
+    const mis = me >= 0 ? g.missions.find(m => m.f === me) : null;
     const wars = me >= 0 ? g.F.alive.filter((a, f) => a && f !== me && g.st[me][f] === E.WAR && f < E.rebels(g)).length : 0;
     $('#wHud').innerHTML = `
       <button class="icb glass" id="wMenu" aria-label="Menú de la partida">${icon('back')}</button>
       <div class="stat glass wturn" aria-label="Turno ${g.turn}, ${E.SEASONS[E.season(g)]} del año ${E.year(g)}"><div><span>Turno</span><b class="num">${g.turn}</b></div><i class="sepv"></i>${SEASON_ICON[E.season(g)]}<div><span>${E.SEASONS[E.season(g)]}</span><b class="num">Año ${E.year(g)}</b></div></div>
-      ${me >= 0 ? `<button class="stat glass wgold" id="wGold" aria-label="Oro ${g.F.gold[me]}, más ${inc} por turno"><i class="coin" aria-hidden="true"></i><div><span>Oro</span><b class="num">${g.F.gold[me]}</b></div><em class="num">+${inc}</em></button>` : ''}
-      <button class="icb glass" id="wDip" aria-label="Diplomacia${wars ? `, ${wars} guerras` : ''}">${icon('flag')}${wars ? `<i class="dot num">${wars}</i>` : ''}</button>`;
+      ${me >= 0 ? `<button class="stat glass wgold" id="wGold" aria-label="Oro ${g.F.gold[me]}, más ${inc} por turno"><i class="coin" aria-hidden="true"></i><div><span>Oro</span><b class="num">${g.F.gold[me]}</b></div><em class="num ${inc < 0 ? 'neg' : ''}">${inc >= 0 ? '+' : '−'}${Math.abs(inc)}</em></button>` : ''}
+      <button class="icb glass" id="wDip" aria-label="Gobierno: diplomacia, consejo y poder${wars ? `, ${wars} guerras` : ''}">${icon('crown')}${wars ? `<i class="dot num">${wars}</i>` : ''}</button>
+      <div class="subhud">${me >= 0 ? `<span class="era-chip">${E.ERAS[E.era(g, me)].name}</span>` : ''}${mis ? `<button class="mis-chip" id="wMis">${icon('target')}${esc(this.missionText(mis))} · <span class="num">${Math.max(0, mis.until - g.turn)}</span> t</button>` : ''}${me >= 0 && g.F.weary[me] >= 20 ? `<span class="era-chip bad">Cansancio ${g.F.weary[me]} %</span>` : ''}</div>`;
     // el oro cuenta hacia el valor nuevo y deja un «−20» flotando
     const gb = /** @type {HTMLElement|null} */ ($('#wGold b'));
     if (gb && me >= 0 && this.goldShown != null && this.goldShown !== g.F.gold[me]) {
@@ -214,6 +223,7 @@ export class Conquest {
     this.goldShown = me >= 0 ? g.F.gold[me] : null;
     $('#wMenu').onclick = () => { sound('tap'); this.menuSheet(); };
     $('#wDip').onclick = () => { sound('tap'); this.diplomacySheet(); };
+    const wm = $('#wMis'); if (wm) wm.onclick = () => { sound('tap'); govSheet(this, 'council'); };
     const gold = $('#wGold'); if (gold) gold.onclick = () => { sound('tap'); this.economySheet(); };
   }
 
@@ -271,48 +281,60 @@ export class Conquest {
   }
 
   /* ======================= Ficha de provincia ======================= */
+  /** Provincia propia desde la que se puede desembarcar en p (o -1). @param {number} p */
+  navalSource(p) {
+    const g = this.g, geo = this.geo;
+    if (g.F.ships[this.me] < 1 || !geo.coast[p]) return -1;
+    return E.provincesOf(g, this.me).filter(q => (E.lvl(g, q, 'puerto') > 0 || E.lvl(g, q, 'astillero') > 0) && E.seaReach(geo, q, p) && g.P.ready[q] >= 1 && E.attackers(g, q) >= 1 && g.P.troops[q] >= 2)
+      .sort((a, b) => g.P.ready[b] - g.P.ready[a])[0] ?? -1;
+  }
   /** @param {number} p */
   card(p) {
     const g = this.g, geo = this.geo, me = this.me, o = g.P.owner[p], mine = o === me, vis = this.visibleSet().has(p);
     const sup = o >= 0 && o < E.rebels(g) ? E.supplied(geo, g, o) : [];
-    const st = o >= 0 && o !== me && o < E.rebels(g) ? g.st[me][o] : -1;
-    const chip = mine ? '<span class="chip mine">Tuya</span>' : o === E.rebels(g) ? `<span class="chip war">${esc(g.F.name[o])}</span>` : st >= 0 ? `<span class="chip ${STATUS_CLS[st]}">${E.STATUS_NAME[st]}</span>` : '';
-    const gen = E.generalAt(g, p);
+    const st = o >= 0 && o !== me && o < E.rebels(g) && me >= 0 ? g.st[me][o] : -1;
+    const chip = mine ? '<span class="chip mine">Tuya</span>' : o === E.rebels(g) ? `<span class="chip war">${esc(g.F.name[o])}</span>` : st >= 0 ? `<span class="chip ${STATUS_CLS[Math.min(3, st)]}">${E.STATUS_NAME[st]}</span>` : '';
+    const gen = E.generalAt(g, p), det = provinceDetail(this, p, vis);
     const facts = [
       `<div><span>Tropas</span><b class="num">${vis ? g.P.troops[p] : '?'}${mine && g.P.ready[p] !== g.P.troops[p] ? `<small> (${g.P.ready[p]} listas)</small>` : ''}</b></div>`,
-      mine ? `<div><span>Oro</span><b class="num">+${E.provinceIncome(geo, g, p, sup)}</b></div>` : `<div><span>Defensa</span><b class="num">×${fmt(E.defenseMul(geo, g, p) / 100, 2)}</b></div>`,
-      `<div><span>Terreno</span><b>${TERRAIN_NAME[geo.terrain[p]]}</b></div>`,
-      mine ? `<div><span>Lealtad</span><b class="num">${g.P.loyal[p]} %</b></div>` : `<div><span>Relación</span><b class="num">${o >= 0 && o < E.rebels(g) ? g.rel[me][o] : '—'}</b></div>`,
+      mine ? `<div><span>Oro</span><b class="num">+${E.provinceIncome(geo, g, p, sup)}</b></div>` : `<div><span>Defensa</span><b class="num">×${fmt(E.defenseMul(geo, g, p, -1, me) / 100, 2)}</b></div>`,
+      `<div><span>Terreno</span><b>${det.terrain}</b></div>`,
+      mine ? `<div><span>Lealtad</span><b class="num">${g.P.loyal[p]} %</b></div>` : `<div><span>Relación</span><b class="num">${o >= 0 && o < E.rebels(g) && me >= 0 ? g.rel[me][o] : '—'}</b></div>`,
     ];
     const tags = [
       g.F.capital[o] === p ? `<span class="tag2">${icon('crown')}Capital</span>` : '',
-      g.P.bld[p] ? `<span class="tag2">${bico(g.P.bld[p])}${E.BUILDINGS[/** @type {'cuartel'} */ (g.P.bld[p])].name}</span>` : '',
-      gen && vis ? `<span class="tag2">★ ${esc(gen.name)} · ${E.SKILLS[gen.skill].name}${gen.lvl ? ' ' + gen.lvl : ''}</span>` : '',
+      gen && vis ? `<span class="tag2">★ ${esc(gen.name)} · ${gen.skills.map(k => E.SKILLS[k].name).join(', ')}${gen.lvl ? ' · nv ' + gen.lvl : ''}</span>` : '',
       mine && !sup[p] ? `<span class="tag2 bad">Sin suministro</span>` : '',
-      geo.coast[p] ? `<span class="tag2">Costa</span>` : '',
+      det.chips,
     ].filter(Boolean).join('');
     let actions = '';
     if (this.watching) actions = '';
     else if (mine) {
       const canMove = E.reachable(geo, g, me, p).length > 0 && g.P.ready[p] >= 1 && g.P.troops[p] >= 2;
-      const canAtt = this.attackTargets(p).length > 0 && g.P.ready[p] >= 1 && g.P.troops[p] >= 2;
+      const canAtt = this.attackTargets(p).length > 0 && g.P.ready[p] >= 1 && E.attackers(g, p) >= 1 && g.P.troops[p] >= 2;
       actions = `
         <button class="act" id="aAtt" ${canAtt ? '' : 'disabled'}>${icon('swords')}<span>Atacar</span></button>
         <button class="act" id="aMove" ${canMove ? '' : 'disabled'}>${icon('map')}<span>Mover</span></button>
         <button class="act" id="aRec">${icon('users')}<span>Reclutar</span></button>
-        <button class="act" id="aBld" ${g.P.bld[p] ? 'disabled' : ''}>${icon('shield')}<span>Construir</span></button>`;
-    } else if (o >= 0 && !this.sent) {
-      const src = this.bestSource(p);
+        <button class="act" id="aBld">${icon('shield')}<span>Construir</span></button>
+        <button class="act" id="aGov">${icon('crown')}<span>Gobernar</span></button>`;
+    } else if (o >= 0 && !this.sent && me >= 0) {
+      const src = this.bestSource(p), nav = this.navalSource(p);
+      const walls = E.lvl(g, p, 'muralla') > 0 && (o === E.rebels(g) || g.st[me][o] === E.WAR) && geo.adj[p].some(q => g.P.owner[q] === me && E.attackers(g, q) >= 5) && !g.sieges.some(x => x.f === me && x.p === p);
       actions = `
         <button class="act" id="aAtt2" ${src >= 0 ? '' : 'disabled'}>${icon('swords')}<span>Atacar</span></button>
+        ${walls ? `<button class="act" id="aSiege">${icon('shield')}<span>Asediar</span></button>` : ''}
+        ${nav >= 0 ? `<button class="act" id="aNav">${icon('target')}<span>Desembarco</span></button>` : ''}
         ${o < E.rebels(g) ? `<button class="act" id="aDip">${icon('flag')}<span>Diplomacia</span></button>` : ''}
         <button class="act" id="aSpy">${icon('target')}<span>Espiar</span></button>`;
     }
+    const nAct = (actions.match(/class="act"/g) || []).length;
     $('#wBar').innerHTML = `<div class="wpanel glass card" style="--fc:${o >= 0 ? g.F.color[o] : '#6B6F7A'}" aria-label="Provincia ${esc(this.pname(p))}">
       <div class="ch">${this.flagOf(o, 'md')}<div class="l"><b>${esc(this.pname(p))}</b><small>${o === me ? 'Tu territorio' : esc(this.fname(o))}</small></div>${chip}<button class="icb x" id="cX" aria-label="Cerrar">${icon('close')}</button></div>
+      ${det.slots}
       ${tags ? `<div class="tags">${tags}</div>` : ''}
       <div class="facts">${facts.join('')}</div>
-      <div class="acts">${actions}</div>
+      <div class="acts n${nAct}">${actions}</div>
     </div>`;
     const on = (/** @type {string} */ id, /** @type {() => void} */ fn) => { const b = document.getElementById(id); if (b) b.onclick = () => { sound('tap'); fn(); }; };
     on('cX', () => this.deselect());
@@ -320,7 +342,14 @@ export class Conquest {
     on('aMove', () => { this.mode = 'move'; this.src = p; this.overlay.highlight({sel:p, own:E.reachable(geo, g, me, p)}); this.hintBar('Toca adónde mover las tropas'); });
     on('aRec', () => this.recruitSheet(p));
     on('aBld', () => this.buildSheet(p));
+    on('aGov', () => this.governSheet(p));
     on('aAtt2', () => { const src = this.bestSource(p); if (src >= 0) this.amountSheet('attack', src, p); });
+    on('aNav', () => { const src = this.navalSource(p); if (src >= 0) this.amountSheet('naval', src, p); });
+    on('aSiege', () => {
+      const from = geo.adj[p].filter(q => g.P.owner[q] === me && E.attackers(g, q) >= 5).sort((a, b) => E.attackers(g, b) - E.attackers(g, a))[0];
+      const ev = this.act({type:'siege', f:me, from, to:p});
+      if (ev) { sound('impact'); toast(`Asedias ${this.pname(p)}: cada turno se abre brecha en sus murallas`); this.afterAction(ev); this.card(p); }
+    });
     on('aDip', () => this.factionSheet(o));
     on('aSpy', () => this.spySheet(p));
     this.layout();
@@ -334,41 +363,62 @@ export class Conquest {
 
   /* ======================= Mover y atacar ======================= */
   /**
-   * Cuántas tropas: con la probabilidad en vivo si es un ataque.
-   * @param {'move'|'attack'} kind @param {number} from @param {number} to
+   * Cuántas tropas y de qué tipo; en un ataque, con la táctica y la probabilidad en vivo.
+   * @param {'move'|'attack'|'naval'} kind @param {number} from @param {number} to
    */
   amountSheet(kind, from, to) {
-    const g = this.g, geo = this.geo, me = this.me;
-    const max = Math.min(g.P.ready[from], g.P.troops[from] - 1);
-    if (max < 1) { toast('No quedan tropas listas en ' + this.pname(from)); return; }
-    this.overlay.highlight({sel:to, own:kind === 'move' ? [from] : [], enemy:kind === 'attack' ? [to] : []});
+    const g = this.g, geo = this.geo, me = this.me, fight = kind !== 'move';
+    const u = g.P.u[from], ready = Math.min(g.P.ready[from], g.P.troops[from] - 1);
+    const cap = kind === 'naval' ? g.F.ships[me] * E.SHIP_CAP : Infinity;
+    if (ready < 1) { toast('No quedan tropas listas en ' + this.pname(from)); return; }
+    this.overlay.highlight({sel:to, own:kind === 'move' ? [from] : [], enemy:fight ? [to] : []});
     this.overlay.clearArrows();
-    this.overlay.arrow(from, to, kind === 'attack' ? '#FF5A4E' : '#7FD8A0', {keep:true});
+    this.overlay.arrow(from, to, fight ? '#FF5A4E' : '#7FD8A0', {keep:true});
     const gen = E.generalAt(g, from), hasGen = !!(gen && gen.f === me);
-    let n = kind === 'attack' ? max : Math.max(1, Math.ceil(max / 2)), withGen = hasGen;
+    const types = [0, 1, 2, 3].filter(t => u[t] > 0 && (!fight || t !== E.MIL));
+    // tropas elegidas por tipo: al atacar, todas las que pueden; al mover, la mitad
+    const pickN = fight ? Math.min(ready, E.attackers(g, from), cap) : Math.max(1, Math.ceil(ready / 2));
+    /** @type {number[]} */ let v = fight ? E.autoMix(geo, g, from, to, pickN) : E.share(u, pickN);
+    let withGen = hasGen, tac = 0;
+    const total = () => v[0] + v[1] + v[2] + v[3];
+    const known = g.intel.some(i => i.f === me && i.p === to) || E.provincesOf(g, me).some(q => E.lvl(g, q, 'torre') > 0 && (geo.adj[q].includes(to) || geo.adj[q].some(r => geo.adj[r].includes(to))));
     const draw = () => {
+      const n = total();
       let info = '';
-      if (kind === 'attack') {
-        const D = g.P.troops[to], p = n >= 1 ? (D > 0 ? E.odds(geo, g, me, from, to, n).p : 1) : 0;
-        const st = g.P.owner[to] < E.rebels(g) ? g.st[me][g.P.owner[to]] : E.WAR;
-        info = `<div class="pr"><span class="num big ${p >= .5 ? 'good' : 'bad'}">${pct(p)}</span><div class="pbar" style="--ca:#FF7A45;--cd:${g.F.color[g.P.owner[to]] || '#6B6F7A'}"><i style="width:${(p * 100).toFixed(1)}%"></i></div></div>
-          <p class="note">${n} contra ${D} defensores${D > 0 ? ` · ataque ×${fmt(E.attackMul(geo, g, me, from, to, withGen) / 100, 2)} · defensa ×${fmt(E.defenseMul(geo, g, to, from) / 100, 2)}` : ' · sin defensores'}${E.riverBetween(geo, from, to) ? ` · cruzas el ${E.riverBetween(geo, from, to)} (+${E.RIVER_DEF} % para el que defiende)` : ''}</p>
-          ${st !== E.WAR ? `<p class="warn">Atacar declara la guerra a ${esc(this.fname(g.P.owner[to]))}${st === E.PACT || st === E.ALLY ? ' y rompe vuestro acuerdo: todos desconfiarán de ti' : ''}.</p>` : ''}`;
+      if (fight) {
+        const stance = g.P.stance[to];
+        if (!known) g.P.stance[to] = 0;
+        const o = E.battleOdds(geo, g, me, from, to, v, {tac, gen:withGen, naval:kind === 'naval'});
+        g.P.stance[to] = stance;
+        const p = n >= 1 ? o.p : 0, d = g.P.owner[to];
+        const st = d < E.rebels(g) ? g.st[me][d] : E.WAR;
+        info = `<div class="tacs" role="radiogroup" aria-label="Táctica">${E.TACTICS.map((t, i) => `<button role="radio" aria-checked="${i === tac}" data-tac="${i}"><b>${t.name}</b><small>${t.desc}</small></button>`).join('')}</div>
+          <div class="pr"><span class="num big ${p >= .5 ? 'good' : 'bad'}">${E.clamp(Math.round(p * 100), 0, 100)} %</span><div class="pbar" style="--ca:#FF7A45;--cd:${g.F.color[d] || '#6B6F7A'}"><i style="width:${(p * 100).toFixed(1)}%"></i></div></div>
+          <p class="note">${n} contra ${o.D}${o.D > 0 ? ` · ataque ×${fmt(o.mA / 100, 2)} · defensa ×${fmt(o.mD / 100, 2)}` : ' · sin defensores'}${E.riverBetween(geo, from, to) && kind !== 'naval' ? ` · cruzas el ${E.riverBetween(geo, from, to)}` : ''}${kind === 'naval' ? ' · desembarco −20 %' : ''} · ${known ? `postura: ${E.STANCES[stance || 0].name.toLowerCase()}` : 'postura desconocida (espía o torre de vigía)'}</p>
+          ${st !== E.WAR ? `<p class="warn">Atacar declara la guerra a ${esc(this.fname(d))}${E.friendly(st) ? ' y rompe vuestro acuerdo: todos desconfiarán de ti' : ''}.</p>` : ''}`;
       }
+      const steppers = types.length > 1 || !fight ? types.map(t => `<div class="ustep">${uico(t)}<span>${E.UNITS[t].name}</span><button class="icb glass" data-dn="${t}" aria-label="Menos ${E.UNITS[t].name}">−</button><b class="num">${v[t]}</b><button class="icb glass" data-up="${t}" aria-label="Más ${E.UNITS[t].name}">+</button><small class="num">/${u[t]}</small></div>`).join('') : '';
       $('#wBar').innerHTML = `<div class="wpanel glass amount">
-        <div class="ah"><b>${kind === 'attack' ? 'Atacar' : 'Mover'}</b><span>${esc(this.pname(from))} → ${esc(this.pname(to))}</span></div>
-        <div class="stepper"><button class="icb glass" id="nMin" aria-label="Menos">−</button><input type="range" id="nR" min="1" max="${max}" value="${n}" aria-label="Tropas"><button class="icb glass" id="nMax" aria-label="Más">+</button><b class="num" id="nV">${n}</b></div>
+        <div class="ah"><b>${kind === 'attack' ? 'Atacar' : kind === 'naval' ? 'Desembarco' : 'Mover'}</b><span>${esc(this.pname(from))} → ${esc(this.pname(to))} · <span class="num">${n}</span> tropas</span></div>
+        ${steppers ? `<div class="usteps">${steppers}</div>` : `<div class="stepper"><button class="icb glass" id="nMin" aria-label="Menos">−</button><input type="range" id="nR" min="1" max="${Math.min(u[types[0] ?? 0], ready, cap)}" value="${n}" aria-label="Tropas"><button class="icb glass" id="nMax" aria-label="Más">+</button><b class="num" id="nV">${n}</b></div>`}
         ${info}
-        ${hasGen ? `<button class="rowi" role="switch" aria-checked="${withGen}" id="nGen">★<div class="l">Con ${esc(gen.name)}<small>${E.SKILLS[gen.skill].name}</small></div><span class="switch"></span></button>` : ''}
-        <div class="row2"><button class="btn sm ghost" id="nNo">Cancelar</button><button class="btn sm" id="nGo">${kind === 'attack' ? icon('swords') + 'Atacar' : icon('map') + 'Mover'}</button></div>
+        ${hasGen ? `<button class="rowi" role="switch" aria-checked="${withGen}" id="nGen">★<div class="l">Con ${esc(gen.name)}<small>${gen.skills.map(k => E.SKILLS[k].name).join(', ')}</small></div><span class="switch"></span></button>` : ''}
+        <div class="row2"><button class="btn sm ghost" id="nNo">Cancelar</button><button class="btn sm" id="nGo" ${n < 1 ? 'disabled' : ''}>${fight ? icon('swords') + (kind === 'naval' ? 'Desembarcar' : 'Atacar') : icon('map') + 'Mover'}</button></div>
       </div>`;
-      const r = /** @type {HTMLInputElement} */ ($('#nR'));
-      r.oninput = () => { n = +r.value; draw(); /** @type {HTMLInputElement} */ ($('#nR')).focus(); };
-      $('#nMin').onclick = () => { n = Math.max(1, n - 1); draw(); };
-      $('#nMax').onclick = () => { n = Math.min(max, n + 1); draw(); };
+      const lim = (/** @type {number} */ t) => Math.min(u[t], v[t] + Math.max(0, Math.min(ready, cap) - total()));
+      $('#wBar').querySelectorAll('[data-up]').forEach(b => /** @type {HTMLElement} */ (b).onclick = () => { const t = +(/** @type {HTMLElement} */ (b).dataset.up || 0); v[t] = Math.min(lim(t), v[t] + 1); draw(); });
+      $('#wBar').querySelectorAll('[data-dn]').forEach(b => /** @type {HTMLElement} */ (b).onclick = () => { const t = +(/** @type {HTMLElement} */ (b).dataset.dn || 0); v[t] = Math.max(0, v[t] - 1); draw(); });
+      $('#wBar').querySelectorAll('[data-tac]').forEach(b => /** @type {HTMLElement} */ (b).onclick = () => { sound('tap'); tac = +(/** @type {HTMLElement} */ (b).dataset.tac || 0); draw(); });
+      const r = /** @type {HTMLInputElement|null} */ ($('#nR'));
+      if (r) {
+        const t = types[0] ?? 0, mx = +r.max;
+        r.oninput = () => { v = [0, 0, 0, 0]; v[t] = +r.value; draw(); /** @type {HTMLInputElement} */ ($('#nR')).focus(); };
+        $('#nMin').onclick = () => { v[t] = Math.max(1, v[t] - 1); draw(); };
+        $('#nMax').onclick = () => { v[t] = Math.min(mx, v[t] + 1); draw(); };
+      }
       const gb = $('#nGen'); if (gb) gb.onclick = () => { withGen = !withGen; draw(); };
       $('#nNo').onclick = () => { sound('tap'); this.overlay.clearArrows(); this.deselect(); };
-      $('#nGo').onclick = () => { this.overlay.clearArrows(); if (kind === 'attack') this.attack(from, to, n, withGen); else this.move(from, to, n, withGen); };
+      $('#nGo').onclick = () => { this.overlay.clearArrows(); if (fight) this.attack(from, to, [...v], withGen, tac, kind === 'naval'); else this.move(from, to, [...v], withGen); };
       this.layout();
     };
     draw();
@@ -378,7 +428,7 @@ export class Conquest {
     if (this.online) {
       if (this.sent || this.watching) { toast(this.sent ? 'Ya has enviado tus órdenes' : 'Estás mirando la partida'); return null; }
       a = {...a, q:this.plan.length};
-      if (a.type === 'attack') a.x = [this.g.P.owner[a.to], this.g.P.troops[a.to]];
+      if (a.type === 'attack' || a.type === 'naval') a.x = [this.g.P.owner[a.to], this.g.P.troops[a.to]];
     }
     try {
       const before = this.g;
@@ -401,9 +451,10 @@ export class Conquest {
     this.view.setOwners(this.g.P.owner); this.refresh(); this.deselect();
     toast('Orden deshecha');
   }
-  /** @param {number} from @param {number} to @param {number} n @param {boolean} gen */
-  async move(from, to, n, gen) {
-    const ev = this.act({type:'move', f:this.me, from, to, n, gen}, true);
+  /** @param {number} from @param {number} to @param {number[]} u tropas por tipo @param {boolean} gen */
+  async move(from, to, u, gen) {
+    const n = u[0] + u[1] + u[2] + u[3];
+    const ev = this.act({type:'move', f:this.me, from, to, n, u, gen}, true);
     if (!ev) return;
     sound('whoosh');
     this.busy = true;
@@ -412,14 +463,14 @@ export class Conquest {
     this.busy = false;
     this.refresh(); this.select(to);
   }
-  /** @param {number} from @param {number} to @param {number} n @param {boolean} gen */
-  async attack(from, to, n, gen) {
-    const before = this.g;
-    const ev = this.act({type:'attack', f:this.me, from, to, n, gen});
+  /** @param {number} from @param {number} to @param {number[]} u @param {boolean} gen @param {number} tac @param {boolean} [naval] */
+  async attack(from, to, u, gen, tac, naval = false) {
+    const before = this.g, n = u[0] + u[1] + u[2];
+    const ev = this.act({type:naval ? 'naval' : 'attack', f:this.me, from, to, n, u, gen, tac});
     if (!ev) return;
     this.busy = true;
     for (const e of ev) if (e.t === 'war' && e.a === this.me) announce(`Declaras la guerra a ${this.fname(e.b)}.`);
-    const a = ev.find(e => e.t === 'attack');
+    const a = ev.find(e => e.t === 'attack' || e.t === 'naval');
     if (a.D > 0) this.battles = [...new Set([...this.battles, a.to])];
     await this.showBattle(before, a, true);
     this.busy = false;
@@ -451,11 +502,13 @@ export class Conquest {
       view.focus([], [], 300); toast(`${this.pname(a.to)} cae sin combate`);
       return;
     }
+    const mix = (/** @type {number[]|undefined} */ u) => u && (u[1] || u[2] || u[3]) ? `<div class="bmix">${[0, 1, 2, 3].filter(t => u[t]).map(t => `${uico(t)}<span class="num">${u[t]}</span>`).join('')}</div>` : '';
     const side = (/** @type {'att'|'def'} */ k, /** @type {number} */ f, /** @type {number} */ n, /** @type {number} */ m, /** @type {string} */ col) => `
       <div class="side ${k}" style="--c:${col}">
         <span class="tag">${icon(k === 'att' ? 'swords' : 'shield')}${k === 'att' ? 'Ataca' : 'Defiende'}${f === this.me ? ' · Tú' : ''}</span>
         <div class="who">${this.flagOf(f, 'sh')}<div><b>${esc(f >= 0 ? g.F.name[f] : 'Rebeldes')}</b><small>${esc(this.pname(k === 'att' ? a.from : a.to))}</small></div></div>
         <div class="pw"><span>Tropas <b class="num">${n}</b></span><em class="num">×${fmt(m / 100, 2)}</em></div>
+        ${mix(k === 'att' ? a.u : a.du)}
         ${diceRow(col)}
         <div class="score num" data-score></div>
         <span class="delta" data-delta></span>
@@ -465,6 +518,7 @@ export class Conquest {
         <div><div class="lbl">Probabilidad de victoria</div><div class="pbar" style="--ca:${colA};--cd:${colD}"><i style="width:${(a.p * 100).toFixed(1)}%"></i></div></div>
         <span class="pv num" style="--pc:${colD}">${pct(1 - a.p)}</span></div>
       <div class="sides" style="position:relative">${side('att', a.f, a.n, a.mA, colA)}<span class="vs">VS</span>${side('def', a.d, a.D, a.mD, colD)}<div class="tie">Empate</div></div>
+      ${a.tac != null ? `<p class="tacline">${E.TACTICS[a.tac].name} contra ${E.STANCES[a.stance || 0].name.toLowerCase()}${a.stance && E.TACTICS[a.tac].counter === a.stance ? ' · ¡la postura lo contrarresta!' : ''}${a.t === 'naval' ? ' · desembarco' : ''}</p>` : ''}
     </div>`;
     this.layout();
     const dock = $('#wBar'), att = /** @type {HTMLElement} */ (dock.querySelector('.side.att')), def = /** @type {HTMLElement} */ (dock.querySelector('.side.def'));
@@ -475,8 +529,8 @@ export class Conquest {
       await Promise.all([roll(/** @type {HTMLElement} */ (att.querySelector('.dice')), ra, fast ? 500 : 950, this.clock, i * 7 + a.to), roll(/** @type {HTMLElement} */ (def.querySelector('.dice')), rd, fast ? 500 : 950, this.clock, i * 7 + a.to + 3)]);
       sound('land'); haptic(8);
       const sa = ra[0] + ra[1] + ra[2], sd = rd[0] + rd[1] + rd[2];
-      /** @type {HTMLElement} */ (att.querySelector('[data-score]')).innerHTML = `${sa} × ${fmt(a.n * a.mA / 100, 1)}`;
-      /** @type {HTMLElement} */ (def.querySelector('[data-score]')).innerHTML = `${sd} × ${fmt(a.D * a.mD / 100, 1)}`;
+      /** @type {HTMLElement} */ (att.querySelector('[data-score]')).innerHTML = `${sa} × ${fmt((a.SA ?? a.n * a.mA * 100) / 10000, 1)}`;
+      /** @type {HTMLElement} */ (def.querySelector('[data-score]')).innerHTML = `${sd} × ${fmt((a.SD ?? a.D * a.mD * 100) / 10000, 1)}`;
       if (i < a.rolls.length - 1) { const t = /** @type {HTMLElement} */ (dock.querySelector('.tie')); t.classList.add('show'); await sleep(700); t.classList.remove('show'); }
       else await sleep(fast ? 200 : 380);
     }
@@ -499,128 +553,28 @@ export class Conquest {
     view.focus([], [], 300);
   }
 
-  /* ======================= Reclutar, construir, espiar ======================= */
-  /** @param {number} p */
-  recruitSheet(p) {
-    const g = this.g, f = this.me, price = g.P.bld[p] === 'cuartel' ? E.COST.recruitCuartel : E.COST.recruit;
-    const max = Math.min(E.COST.maxRecruit, Math.floor(g.F.gold[f] / price));
-    const canGen = !E.generalAt(g, p) && E.generalsOf(g, f).length < E.COST.maxGenerals;
-    if (max < 1 && !canGen) { toast(`Reclutar cuesta ${price} de oro por tropa`); return; }
-    let n = Math.max(1, max);
-    const draw = (/** @type {HTMLElement} */ el) => {
-      /** @type {HTMLElement} */ (el.querySelector('#rV')).textContent = String(n);
-      /** @type {HTMLElement} */ (el.querySelector('#rC')).textContent = String(n * price);
-    };
-    openSheet({title:'Reclutar', body:`
-      <p class="note" style="margin:0 4px 10px">${esc(this.pname(p))}: ${price} de oro por tropa${g.P.bld[p] === 'cuartel' ? ' (con cuartel)' : ''}. Tienes ${g.F.gold[f]}.</p>
-      ${max >= 1 ? `<div class="stepper"><button class="icb glass" id="rMin">−</button><input type="range" id="rR" min="1" max="${max}" value="${n}" aria-label="Tropas"><button class="icb glass" id="rMax">+</button><b class="num" id="rV">${n}</b></div>
-      <button class="btn" id="rGo">${icon('users')}Reclutar por <span class="num" id="rC">${n * price}</span> de oro</button>` : `<p class="note">No tienes oro para reclutar tropas (${price} por tropa).</p><span id="rR"></span><span id="rV"></span><span id="rC"></span><span id="rMin"></span><span id="rMax"></span><span id="rGo"></span>`}
-      ${canGen ? `<div class="glabel">General (${E.COST.general} de oro)</div><div class="grp">${Object.entries(E.SKILLS).map(([k, v]) => `<button class="rowi" data-sk="${k}" ${g.F.gold[f] >= E.COST.general ? '' : 'disabled'}>★<div class="l">${v.name}<small>${v.desc}</small></div></button>`).join('')}</div>
-        <p class="note">Va con las tropas que salen de su provincia y sube de nivel al ganar batallas. Máximo ${E.COST.maxGenerals}.</p>` : ''}`,
-      mount:el => {
-        const r = /** @type {HTMLInputElement} */ (el.querySelector('#rR'));
-        r.oninput = () => { n = +r.value; draw(el); };
-        /** @type {HTMLElement} */ (el.querySelector('#rMin')).onclick = () => { n = Math.max(1, n - 1); r.value = String(n); draw(el); };
-        /** @type {HTMLElement} */ (el.querySelector('#rMax')).onclick = () => { n = Math.min(max, n + 1); r.value = String(n); draw(el); };
-        /** @type {HTMLElement} */ (el.querySelector('#rGo')).onclick = () => {
-          if (max >= 1 && this.act({type:'recruit', f, p, n}, true)) { sound('coin'); closeSheet(); this.refresh(); this.card(p); this.feedback(p, `+${n} tropas`, 'gain'); }
-        };
-        el.querySelectorAll('[data-sk]').forEach(b => /** @type {HTMLElement} */ (b).onclick = () => {
-          const ev = this.act({type:'hire', f, p, skill:/** @type {any} */ (/** @type {HTMLElement} */ (b).dataset.sk)}, true);
-          if (ev) { const h = this.g.gens.find(x => x.p === p); sound('conquer'); closeSheet(); toast(`${h ? h.name : 'Un general'} se une a tu ejército`); this.refresh(); this.card(p); this.feedback(p, '★ General', 'info', true); }
-        });
-      }});
-  }
-  /** @param {number} p */
-  buildSheet(p) {
-    const g = this.g, f = this.me;
-    openSheet({title:'Construir', body:`
-      <p class="note" style="margin:0 4px 10px">Un edificio por provincia. Tienes ${g.F.gold[f]} de oro.</p>
-      <div class="grp">${Object.entries(E.BUILDINGS).map(([k, b]) => {
-        const cost = E.buildCost(g, f, /** @type {any} */ (k)), ok = g.F.gold[f] >= cost && (k !== 'puerto' || this.geo.coast[p]);
-        return `<button class="rowi" data-b="${k}" ${ok ? '' : 'disabled'}>${bico(k)}<div class="l">${b.name}<small>${b.desc}${k === 'puerto' && !this.geo.coast[p] ? ' · necesita costa' : ''}</small></div><b class="num cost">${cost}</b></button>`;
-      }).join('')}</div>`,
-      mount:el => el.querySelectorAll('[data-b]').forEach(b => /** @type {HTMLElement} */ (b).onclick = () => {
-        const k = /** @type {'cuartel'} */ (/** @type {HTMLElement} */ (b).dataset.b);
-        if (this.act({type:'build', f, p, b:k}, true)) { sound('build'); closeSheet(); this.refresh(); this.card(p); this.feedback(p, E.BUILDINGS[k].name, 'gain', true); }
-      })});
-  }
-  /** @param {number} p */
-  spySheet(p) {
-    const g = this.g, f = this.me, ch = E.spyChance(g, f);
-    openSheet({title:'Espionaje', body:`
-      <p class="note" style="margin:0 4px 10px">${esc(this.pname(p))} · probabilidad de éxito ${ch} %. Si falla, la relación empeora.</p>
-      <div class="grp">${[['espiar', 'Espiar', 'Ves sus tropas 3 turnos'], ['sabotear', 'Sabotear', 'Destruye su edificio'], ['agitar', 'Agitar', '−30 de lealtad']].map(([k, n, d]) => {
-        const cost = E.spyCost(g, f, /** @type {any} */ (k)), ok = g.F.gold[f] >= cost && (k !== 'sabotear' || !!g.P.bld[p]);
-        return `<button class="rowi" data-k="${k}" ${ok ? '' : 'disabled'}>${icon('target')}<div class="l">${n}<small>${d}</small></div><b class="num cost">${cost}</b></button>`;
-      }).join('')}</div>`,
-      mount:el => el.querySelectorAll('[data-k]').forEach(b => /** @type {HTMLElement} */ (b).onclick = () => {
-        const ev = this.act({type:'spy', f, p, kind:/** @type {any} */ (/** @type {HTMLElement} */ (b).dataset.k)});
-        if (!ev) return;
-        const e = ev.find(x => x.t === 'spy');
-        closeSheet(); sound(e.ok ? 'lock' : 'defend'); toast(e.ok ? 'Misión cumplida' : 'Tu espía ha sido descubierto');
-        this.refresh(); this.card(p);
-      })});
-  }
-
-  /* ======================= Diplomacia ======================= */
-  diplomacySheet() {
-    this.hooks.onEvent?.('diplomacy');
-    const g = this.g, me = this.me, R = E.rebels(g);
-    const near = new Set();
-    for (let p = 0; p < this.geo.n; p++) if (g.P.owner[p] === me) for (const q of this.geo.adj[p]) { const o = g.P.owner[q]; if (o >= 0 && o !== me && o < R) near.add(o); }
-    const list = [];
-    for (let f = 0; f < R; f++) if (f !== me && g.F.alive[f]) list.push(f);
-    list.sort((a, b) => Number(near.has(b)) - Number(near.has(a)) || Number(g.st[me][b] === E.WAR) - Number(g.st[me][a] === E.WAR) || g.rel[me][b] - g.rel[me][a]);
-    openSheet({title:'Diplomacia', body:`
-      <p class="note" style="margin:0 4px 10px">Primero tus vecinos. Toca un bando para proponerle algo.</p>
-      <div class="grp dlist">${list.map(f => `<button class="rowi" data-f="${f}">${this.flagOf(f)}<div class="l">${esc(g.F.name[f])}${this.playerName(f) ? ` <em class="you ext">${esc(this.playerName(f))}</em>` : near.has(f) ? ' <em class="you ext">Vecino</em>' : ''}<small><span class="rel"><i style="--v:${(g.rel[me][f] + 100) / 2}%"></i></span> ${g.rel[me][f]}</small></div><span class="chip ${STATUS_CLS[g.st[me][f]]}">${E.STATUS_NAME[g.st[me][f]]}</span></button>`).join('')}</div>`,
-      mount:el => el.querySelectorAll('[data-f]').forEach(b => /** @type {HTMLElement} */ (b).onclick = () => { closeSheet(); setTimeout(() => this.factionSheet(+(/** @type {HTMLElement} */ (b).dataset.f || 0)), 300); })});
-  }
-  /** @param {number} d */
-  factionSheet(d) {
-    const g = this.g, me = this.me, geo = this.geo, st = g.st[me][d];
-    const opts = /** @type {[string, string, string][]} */ ([]);
-    if (st === E.WAR) opts.push(['paz', 'Proponer la paz', '']);
-    if (st === E.PEACE) opts.push(['pacto', 'Pacto de no agresión', `${E.PACT_TURNS} turnos sin atacaros`]);
-    if (st !== E.WAR && st !== E.ALLY) opts.push(['alianza', 'Proponer alianza', 'Os defendéis mutuamente']);
-    opts.push(['regalo', `Regalar ${E.COST.gift[0]} de oro`, '+10 de relación'], ['regalo2', `Regalar ${E.COST.gift[1]} de oro`, '+25 de relación']);
-    if (st !== E.ALLY) opts.push(['tributo', 'Exigir tributo', 'Si te teme, te paga el 20 % de su oro']);
-    opts.push(['anexion', 'Anexión pacífica', 'Se une a ti con todas sus provincias']);
-    if (st !== E.WAR) opts.push(['guerra', 'Declarar la guerra', st === E.PACT || st === E.ALLY ? 'Rompe vuestro acuerdo: traición' : '']);
-    const c = E.counts(g.P.owner, E.rebels(g) + 1);
-    openSheet({title:g.F.name[d], body:`
-      <div class="fhead">${this.flagOf(d, 'md')}<div><span class="chip ${STATUS_CLS[st]}">${E.STATUS_NAME[st]}${st === E.PACT ? ' · hasta el turno ' + g.until[me][d] : ''}</span>
-        <p class="note">${c[d]} provincias · fuerza ${E.strength(g, d)} (tú ${E.strength(g, me)}) · relación ${g.rel[me][d]}</p></div></div>
-      <div class="grp">${opts.map(([k, n, sub]) => {
-        const w = k.startsWith('regalo') || k === 'guerra' ? null : E.wouldAccept(geo, g, me, d, k);
-        return `<button class="rowi" data-k="${k}">${icon(k === 'guerra' ? 'swords' : 'flag')}<div class="l">${n}<small>${w ? `<b class="${w.ok ? 'ok' : 'no'}">${w.ok ? 'Aceptará' : 'Rechazará'}</b> · ${esc(w.why)}` : esc(sub)}</small></div></button>`;
-      }).join('')}</div>`,
-      mount:el => el.querySelectorAll('[data-k]').forEach(b => /** @type {HTMLElement} */ (b).onclick = () => {
-        const k = /** @type {HTMLElement} */ (b).dataset.k || '';
-        const a = k.startsWith('regalo') ? {type:'diplo', f:me, d, kind:'regalo', amount:k === 'regalo2' ? E.COST.gift[1] : E.COST.gift[0]} : {type:'diplo', f:me, d, kind:k};
-        const ev = this.act(a); if (!ev) return;
-        closeSheet();
-        const acc = ev.find(e => e.t === 'accept'), rej = ev.find(e => e.t === 'reject');
-        if (acc) { sound('conquer'); toast(`${g.F.name[d]} acepta`); }
-        else if (rej) { sound('defend'); toast(`${g.F.name[d]} rechaza: ${rej.why || ''}`); }
-        else if (k === 'guerra') { sound('impact'); toast(`Guerra contra ${g.F.name[d]}`); }
-        else sound('lock');
-        this.afterAction(ev);
-        if (this.sel >= 0) this.card(this.sel);
-      })});
-  }
-  /** Propuestas de los bots al empezar tu turno. */
+  /* ======================= Hojas (warsheets.js) ======================= */
+  /** @param {number} p */ recruitSheet(p) { recruitSheet(this, p); }
+  /** @param {number} p */ buildSheet(p) { buildSheet(this, p); }
+  /** @param {number} p */ governSheet(p) { governSheet(this, p); }
+  /** @param {number} p */ spySheet(p) { spySheet(this, p); }
+  /** @param {number} d */ factionSheet(d) { factionSheet(this, d); }
+  diplomacySheet() { govSheet(this, 'dip'); }
+  economySheet() { economySheet(this); }
+  /** Propuestas de los bots, decisiones y habilidades al empezar tu turno. */
   async afterTurnStart() {
     const g = this.g, me = this.me;
-    const text = {paz:'propone la paz', pacto:'propone un pacto de no agresión', alianza:'propone una alianza', tributo:'exige un tributo del 20 % de tu oro'};
+    if (me < 0 || this.watching) { this.refresh(); return; }
+    const text = {paz:'propone la paz', pacto:'propone un pacto de no agresión', alianza:'propone una alianza', tributo:'exige un tributo del 20 % de tu oro',
+      federacion:'propone una federación', boda:'propone una boda entre vuestras casas', vasallaje:'exige que seas su vasallo (le pagarás el 25 % de tu oro)',
+      anexion:'te propone unirte a su reino', ultimatum:'exige que le entregues una provincia', comprar:'quiere comprarte una provincia'};
     for (;;) {
       const i = this.g.offers.findIndex(o => o.to === me);
       if (i < 0) break;
       const o = this.g.offers[i];
       const ans = await new Promise(res => openSheet({title:'Diplomacia', body:`
-        <div class="fhead">${this.flagOf(o.from, 'md')}<div><b class="disp" style="font:800 24px/1 var(--display)">${esc(g.F.name[o.from])}</b><p class="note">${text[/** @type {'paz'} */ (o.kind)] || o.kind}</p></div></div>
-        ${o.kind === 'tributo' ? '<p class="warn">Si te niegas, puede declararte la guerra.</p>' : ''}
+        <div class="fhead">${this.flagOf(o.from, 'md')}<div><b class="disp" style="font:800 24px/1 var(--display)">${esc(g.F.name[o.from])}</b><p class="note">${text[/** @type {'paz'} */ (o.kind)] || o.kind}${o.p != null && o.p >= 0 ? ': ' + esc(this.pname(o.p)) : ''}</p></div></div>
+        ${o.kind === 'tributo' || o.kind === 'vasallaje' || o.kind === 'ultimatum' ? '<p class="warn">Si te niegas, puede declararte la guerra.</p>' : ''}
         <div class="row2"><button class="btn sm ghost" id="oNo">Rechazar</button><button class="btn sm" id="oYes">Aceptar</button></div>`,
         close:() => res(null),
         mount:el => {
@@ -632,35 +586,24 @@ export class Conquest {
       sound(ans ? 'conquer' : 'tap');
       await sleep(350);
     }
+    // decisiones que llegan este turno
+    for (const d of this.g.decisions.filter(x => x.f === me)) {
+      const opt = await decisionSheet(this, d);
+      if (opt == null) break;
+      const ev = this.act({type:'decide', f:me, id:d.id, opt});
+      if (ev) { sound('lock'); this.afterAction(ev); }
+      await sleep(300);
+    }
+    // generales que han subido de nivel
+    for (const gen of this.g.gens.filter(x => x.f === me && x.pend > 0)) {
+      const sk = await skillSheet(this, gen);
+      if (!sk) break;
+      if (this.act({type:'skill', f:me, id:gen.id, skill:sk})) { sound('conquer'); toast(`${gen.name}: ${E.SKILLS[/** @type {'asedio'} */ (sk)].name}`); }
+      await sleep(300);
+    }
     this.refresh();
   }
 
-  /* ======================= Paneles ======================= */
-  economySheet() {
-    this.hooks.onEvent?.('economy');
-    const g = this.g, me = this.me, geo = this.geo, sup = E.supplied(geo, g, me);
-    const rows = E.provincesOf(g, me).map(p => ({p, v:E.provinceIncome(geo, g, p, sup), gr:E.growth(geo, g, p, sup)})).sort((a, b) => b.v - a.v);
-    const tech = E.TECHS.map((k, i) => {
-      const lvl = g.F.tech[me][i], info = E.TECH_INFO[k], cost = lvl < 3 ? E.COST.tech[lvl] : 0;
-      return `<div class="tech"><div><b>${info.name}</b><small>${lvl < 3 ? 'Siguiente: ' + info.desc[lvl] : 'Completa: ' + info.desc[2]}</small><div class="lv">${[0, 1, 2].map(l => `<i class="${l < lvl ? 'on' : ''}"></i>`).join('')}</div></div>
-        ${lvl < 3 ? `<button class="btn sm" data-t="${k}" ${g.F.gold[me] >= cost ? '' : 'disabled'}>${cost}</button>` : ''}</div>`;
-    }).join('');
-    openSheet({title:'Tesoro', body:`
-      <p class="note" style="margin:0 4px 10px">${g.F.gold[me]} de oro · +${E.income(geo, g, me)} por turno${g.F.trait[me] && E.TRAITS[/** @type {'mercader'} */ (g.F.trait[me])] ? ' · líder ' + E.TRAITS[/** @type {'mercader'} */ (g.F.trait[me])].name.toLowerCase() : ''}</p>
-      <div class="glabel">Mejoras</div>
-      <div class="techs">${tech}</div>
-      <div class="glabel">Ingresos por provincia</div>
-      <div class="grp">${rows.map(r => `<div class="rowi"><div class="l">${esc(this.pname(r.p))}<small>${r.gr ? '+' + r.gr + ' tropas/turno' : 'No crece'}${!sup[r.p] ? ' · sin suministro' : ''}${g.P.loyal[r.p] < 30 ? ' · poco leal' : ''}</small></div><b class="num">+${r.v}</b></div>`).join('')}</div>`,
-      mount:el => el.querySelectorAll('[data-t]').forEach(b => /** @type {HTMLElement} */ (b).onclick = () => {
-        const k = /** @type {E.Tech} */ (/** @type {HTMLElement} */ (b).dataset.t);
-        if (this.act({type:'research', f:me, k}, true)) {
-          sound('conquer'); closeSheet(); this.refresh();
-          const lvl = this.g.F.tech[me][E.TECHS.indexOf(k)], cap = this.g.F.capital[me];
-          if (cap >= 0) this.feedback(cap, `${E.TECH_INFO[k].name} ${lvl}`, 'info', true);
-          this.banner(`${E.TECH_INFO[k].name} · nivel ${lvl}: ${E.TECH_INFO[k].desc[lvl - 1]}`);
-        }
-      })});
-  }
   menuSheet() {
     openSheet({title:'Partida', body:`
       <div class="grp">
@@ -706,7 +649,7 @@ export class Conquest {
    * @param {Game} before lo que veía el jugador @param {Game} g partida nueva @param {any[]} ev sucesos que hay que enseñar
    */
   async afterResolve(before, g, ev) {
-    this.battles = [...new Set(ev.filter(e => e.t === 'attack' && e.D > 0).map(e => e.to))];
+    this.battles = [...new Set(ev.filter(e => (e.t === 'attack' || e.t === 'naval') && e.D > 0).map(e => e.to))];
     this.busy = true;
     await this.animateBots(before, ev);
     this.g = g; this.save();
@@ -717,6 +660,19 @@ export class Conquest {
       if (e.t === 'event' && (e.f === this.me)) toast(eventText(e, this));
       if (e.t === 'revolt' && (e.from === this.me || e.to === this.me)) toast(`${this.pname(e.p)} se rebela`);
       if (e.t === 'season') toast(`Llega ${E.SEASONS[e.s].toLowerCase()}`);
+      const mine = e.f === this.me;
+      if (e.t === 'bancarrota' && mine) toast(`Sin oro para pagar al ejército: desertan ${e.v} tropas`);
+      if (e.t === 'siegeup' && (mine || g.P.owner[e.p] === this.me)) toast(`Asedio de ${this.pname(e.p)}: brecha ${e.breach}, −${e.v} tropas dentro`);
+      if (e.t === 'mission' && mine) toast(e.ok ? `Misión cumplida: +${e.reward} de oro` : 'Misión fallida');
+      if (e.t === 'newmission' && mine) toast('Nueva misión: mírala arriba');
+      if (e.t === 'catastrofe' && (e.ps || []).some((/** @type {number} */ p) => g.P.owner[p] === this.me)) toast(catText(e, this));
+      if (e.t === 'era' && !mine) toast(`${g.F.name[e.f]} entra en el ${E.ERAS[e.era].name}`);
+      if (e.t === 'retire' && mine) toast(`${e.name} se retira tras muchos años de servicio`);
+      if (e.t === 'assim' && mine) toast(`${this.pname(e.p)} adopta tu cultura`);
+      if (e.t === 'wonder' && !mine) toast(`${g.F.name[e.f]} construye ${/** @type {Record<string, {name:string}>} */ (E.WONDERS)[e.w].name}`);
+      if (e.t === 'vassal' && (e.a === this.me || e.b === this.me)) toast(e.kind === 'vasallaje' ? `${g.F.name[e.a]} es ahora vasallo de ${g.F.name[e.b]}` : `${g.F.name[e.a]} se independiza`);
+      if ((e.t === 'attack' || e.t === 'naval') && e.gdead && (e.f === this.me || e.d === this.me)) toast(`Cae el general ${e.gdead}`);
+      if (e.t === 'blockade' && e.d === this.me) toast(`${g.F.name[e.f]} bloquea el puerto de ${this.pname(e.p)}`);
     }
     for (const e of ev) if (e.t === 'cancel' && e.f === this.me) toast(`Orden anulada: ${e.why}`);
     award(medalsFor(g, this.me));
@@ -831,7 +787,7 @@ export class Conquest {
     };
     for (const e of ev) {
       if (e.t === 'war' && (e.b === me || e.a === me) && e.a !== me) { await flush(); sound('impact'); this.banner(`¡${before.F.name[e.a]} te declara la guerra!`); await sleep(900 / this.speed); }
-      if (e.t === 'attack') {
+      if (e.t === 'attack' || e.t === 'naval') {
         if (e.d === me || e.f === me) {
           await flush();
           const snap = {...before, P:{...before.P, owner:[...owner]}};
@@ -999,6 +955,11 @@ function victoryText(g) {
   if (v.type === 'diplomatica') return 'con el 30 % de las provincias y pacto o alianza con todos los bandos que sigan en pie';
   if (v.type === 'puntos') return `con más puntos al acabar el turno ${v.turns || 60} (10 por provincia, 25 por capital, más tropas y oro)`;
   return g.P.active.every(Boolean) ? 'cuando dominas todas las provincias' : 'cuando dominas todas las provincias en juego';
+}
+/** Texto de una catástrofe. @param {any} e @param {Conquest} c */
+function catText(e, c) {
+  const p = e.p != null ? c.pname(e.p) : '';
+  return ({riada:'Riada del Ebro: los campos se inundan', sequia:'Sequía en La Mancha: sin oro en la comarca', incendio:`Incendio en ${p}: arden bosques y cuarteles`, terremoto:`Terremoto en ${p}: daños en los edificios`})[/** @type {'riada'} */ (e.kind)] || e.kind;
 }
 /** Texto de un suceso para el jugador. @param {any} e @param {Conquest} c */
 function eventText(e, c) {

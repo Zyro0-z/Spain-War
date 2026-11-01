@@ -30,6 +30,10 @@ function story(n, g, pn, me) {
     case 'betray': return {w, h:`Traición: ${A} rompe su pacto con ${B}`, l:'Toda la península toma nota. Nadie volverá a fiarse tan fácilmente.'};
     case 'war': return {w, h:pick([`${A} declara la guerra a ${B}`, `Guerra entre ${A} y ${B}`, `${A} se lanza contra ${B}`]), l:n.k === 'alianza' ? `${A} cumple su palabra y entra en la guerra junto a su aliado.` : n.k === 'ataque' ? 'Las tropas cruzaron la frontera sin previo aviso.' : 'Los embajadores abandonan las capitales.'};
     case 'revolt': return {w, h:`${P} se alza contra ${A}`, l:'La provincia, cansada de la ocupación, expulsa a las tropas.'};
+    case 'wonder': return {w:45 + mine, h:`${A} levanta ${/** @type {Record<string, {name:string}>} */ (E.WONDERS)[n.k || '']?.name || 'una maravilla'}`, l:`Las obras en ${P} asombran a toda la península.`};
+    case 'era': return {w:40 + mine, h:`${A} entra en el ${E.ERAS[+(n.k || 0)]?.name || 'nuevo tiempo'}`, l:'Nuevas ideas, nuevas armas y nuevos edificios.'};
+    case 'catastrofe': return {w:35, h:({riada:'Riada del Ebro', sequia:'Sequía en La Mancha', incendio:`Arde ${P}`, terremoto:`Terremoto en ${P}`})[/** @type {'riada'} */ (n.k)] || 'Catástrofe', l:'Los daños tardarán en repararse.'};
+    case 'vassal': return {w:45 + mine, h:n.k === 'vasallaje' ? `${A} se somete a ${B}` : `${A} rompe con ${B}`, l:n.k === 'vasallaje' ? 'Pagará tributo y seguirá a su señor a la guerra.' : 'Se declara independiente.'};
     case 'accept': {
       if (k === 'alianza') return {w, h:`${A} y ${B} sellan una alianza`, l:'Se defenderán mutuamente ante cualquier ataque.'};
       if (k === 'pacto') return {w, h:pick([`Pacto de no agresión entre ${A} y ${B}`, `${A} y ${B} firman la paz armada`]), l:'Ninguno atacará al otro durante una temporada.'};

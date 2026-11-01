@@ -14,6 +14,8 @@ const colors = map.provinces.map(() => '#888888');
 const P = n => map.provinces.find(p => p.name === n).i;
 const game = (o = {}) => E.createGame(geo, scenario(map, o.sc || 'las47', colors), {seed:o.seed || 'T', humans:o.humans ?? [P('Madrid')], rules:{difficulty:o.diff || 'facil', events:false, ...(o.rules || {})}});
 const act = (g, a) => E.apply(geo, g, a).g;
+/** Pone n tropas de infantería en una provincia (y listas). */
+const troops = (g, p, n) => { g.P.u[p] = [n, 0, 0, 0]; g.P.troops[p] = n; g.P.ready[p] = n; };
 
 test('el motor no usa DOM, azar del sistema ni funciones que cambian entre navegadores', () => {
   for (const f of ['engine.js', 'turn.js', 'scenarios.js', 'data.js']) {
@@ -55,7 +57,7 @@ test('mover: solo a provincias propias alcanzables y dejando 1', () => {
 test('atacar: probabilidad exacta, conquista, guerra declarada y moral', () => {
   let g = game();
   const me = P('Madrid'), to = P('Segovia');
-  g.P.troops[me] = g.P.ready[me] = 60;
+  troops(g, me, 60);
   const o = E.odds(geo, g, me, me, to, 50);
   assert.equal(o.p, winProb(o.SA, o.SD).p);
   g = act(g, {type:'attack', f:me, from:me, to, n:50});
@@ -77,7 +79,7 @@ test('combate: con mucha ventaja casi siempre se gana y las pérdidas son razona
   for (let i = 0; i < 40; i++) {
     let g = game({seed:'C' + i});
     const me = P('Madrid'), to = P('Toledo');
-    g.P.troops[me] = g.P.ready[me] = 80;
+    troops(g, me, 80);
     g = act(g, {type:'attack', f:me, from:me, to, n:70});
     const ev = g.log.find(e => e.t === 'attack');
     if (ev.won) { wins++; assert.ok(ev.attLoss < 70); }
@@ -90,11 +92,14 @@ test('reclutar, construir, mejorar y contratar cuestan oro', () => {
   let g = game();
   const me = P('Madrid');
   g.F.gold[me] = 500;
+  const price = E.unitCost(geo, g, me, me, E.INF);
   g = act(g, {type:'recruit', f:me, p:me, n:10});
-  assert.equal(g.F.gold[me], 460);
+  assert.equal(g.F.gold[me], 500 - 10 * price);
+  const gold0 = g.F.gold[me], c1 = E.buildCost(geo, g, me, me, 'cuartel');
   g = act(g, {type:'build', f:me, p:me, b:'cuartel'});
-  assert.equal(g.P.bld[me], 'cuartel');
-  assert.throws(() => act(g, {type:'build', f:me, p:me, b:'mercado'}), /Ya tiene/);
+  assert.equal(E.lvl(g, me, 'cuartel'), 1);
+  assert.equal(g.F.gold[me], gold0 - c1);
+  assert.ok(E.buildCost(geo, g, me, me, 'cuartel') > c1, 'subir de nivel cuesta más');
   assert.throws(() => act(g, {type:'build', f:P('Barcelona'), p:P('Barcelona'), b:'puerto'}), /oro/, 'Barcelona tiene costa pero no oro');
   g = act(g, {type:'research', f:me, k:'artilleria'});
   assert.deepEqual(g.F.tech[me], [0, 1, 0, 0]);
@@ -121,7 +126,7 @@ test('diplomacia: aceptan o rechazan según las reglas y la anexión entrega las
   // anexión de un bando pequeño y amigo
   let h = game({sc:'comunidades', humans:[5]});
   h.rel[5][3] = h.rel[3][5] = 80; // Cantabria
-  for (const p of E.provincesOf(h, 5)) h.P.troops[p] = 60;
+  for (const p of E.provincesOf(h, 5)) troops(h, p, 60);
   assert.equal(E.wouldAccept(geo, h, 5, 3, 'anexion').ok, true);
   h = act(h, {type:'diplo', f:5, d:3, kind:'anexion'});
   assert.equal(h.P.owner[P('Cantabria')], 5);
@@ -133,7 +138,7 @@ test('fin de turno: oro, crecimiento con tope y tropas listas', () => {
   const me = P('Madrid');
   const {g} = endTurn(geo, g0);
   assert.equal(g.turn, 2);
-  assert.equal(g.F.gold[me], 20 + E.income(geo, g0, me));
+  assert.equal(g.F.gold[me], Math.max(0, 20 + E.treasury(geo, g0, me).total));
   assert.equal(g.P.troops[me], 10 + E.growth(geo, g0, me, E.supplied(geo, g0, me)));
   assert.deepEqual(g.P.ready, g.P.troops);
   let x = g0; for (let i = 0; i < 80; i++) x = endTurn(geo, x).g;
@@ -145,7 +150,7 @@ test('fácil: los bots no se atacan entre sí; el que atacas entra en guerra con
   for (let i = 0; i < 20; i++) g = endTurn(geo, g).g;
   assert.ok(g.F.alive.slice(0, 47).every(Boolean), 'nadie ha caído');
   const me = P('Madrid'), t = P('Toledo');
-  g.P.troops[me] = g.P.ready[me] = 25;
+  troops(g, me, 25);
   g = act(g, {type:'attack', f:me, from:me, to:t, n:3});
   assert.equal(g.st[me][t], E.WAR);
   assert.equal(g.st[P('Cuenca')][t], E.PEACE, 'los demás siguen en paz');
@@ -178,7 +183,7 @@ test('suministro: una provincia aislada de la capital rinde la mitad', () => {
   g.F.capital[5] = P('Burgos');
   const sup = E.supplied(geo, g, 5);
   assert.equal(sup[cut], false);
-  assert.equal(E.provinceIncome(geo, g, cut, sup), Math.floor(tier('24') / 2));
+  assert.equal(E.provinceIncome(geo, g, cut, sup), Math.floor(E.provinceIncome(geo, g, cut, sup.map(() => true)) / 2));
 });
 
 test('rebeliones: provincia poco leal y sin tropas puede rebelarse', () => {
@@ -186,7 +191,7 @@ test('rebeliones: provincia poco leal y sin tropas puede rebelarse', () => {
   for (let s = 0; s < 30 && !rebelled; s++) {
     let g = game({seed:'REB' + s});
     const me = P('Madrid'), t = P('Toledo');
-    g.P.owner[t] = me; g.P.troops[t] = 1; g.P.loyal[t] = 0; g.P.origin[t] = t; g.F.alive[t] = true; g.F.capital[t] = -1;
+    g.P.owner[t] = me; troops(g, t, 1); g.P.loyal[t] = 0; g.P.origin[t] = t; g.F.alive[t] = true; g.F.capital[t] = -1;
     g.P.owner[P('Cuenca')] = me;
     g = endTurn(geo, g).g;
     if (g.P.owner[t] !== me) rebelled = true;
@@ -198,7 +203,7 @@ test('victoria por capitales: cuentan las capitales originales aunque el bando c
   let g = E.createGame(geo, scenario(map, 'comunidades', colors), {seed:'CAP', humans:[10], rules:{difficulty:'facil', events:false, victory:{type:'capitales', n:2}}});
   const tol = P('Toledo'), me = 10;
   // Madrid conquista la capital de Castilla-La Mancha
-  g.P.troops[P('Madrid')] = g.P.ready[P('Madrid')] = 200;
+  troops(g, P('Madrid'), 200);
   for (let i = 0; i < 10 && g.P.owner[tol] !== me; i++) g = act(g, {type:'attack', f:me, from:P('Madrid'), to:tol, n:Math.min(g.P.ready[P('Madrid')], g.P.troops[P('Madrid')] - 1)});
   assert.equal(g.P.owner[tol], me);
   assert.equal(g.over, true, 'Madrid + Toledo = 2 capitales');

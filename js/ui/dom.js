@@ -81,6 +81,6 @@ export function closeSheet() {
   const sh = $('#sheet'), bd = $('#backdrop');
   if (sh.hidden) return;
   sh.classList.add('out'); bd.hidden = true;
-  setTimeout(() => { sh.hidden = true; sh.innerHTML = ''; }, 280);
+  setTimeout(() => { if (sh.classList.contains('out')) { sh.hidden = true; sh.innerHTML = ''; } }, 280);
   const f = onClose; onClose = null; if (f) f();
 }

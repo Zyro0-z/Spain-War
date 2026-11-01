@@ -1,6 +1,6 @@
 // @ts-check
 // Logros: qué medallas se ganan con el estado de una partida. Puro (sin DOM); la interfaz guarda las ganadas.
-import {ALLY, TECHS, rebels} from './engine.js';
+import {ALLY, FED, TECHS, rebels, buildingsAt} from './engine.js';
 
 /** @typedef {'bronce'|'plata'|'oro'} Metal */
 /** @typedef {{name:string, desc:string, metal:Metal, sym:string}} Medal */
@@ -10,7 +10,11 @@ export const MEDALS = {
   sangre:{name:'Primera sangre', desc:'Conquista tu primera provincia', metal:'bronce', sym:'espadas'},
   capital:{name:'Corazón del enemigo', desc:'Toma una capital enemiga', metal:'bronce', sym:'corona'},
   tesoro:{name:'Arcas llenas', desc:'Reúne 300 de oro', metal:'bronce', sym:'sol'},
-  obras:{name:'Gran constructor', desc:'Ten 5 edificios a la vez', metal:'bronce', sym:'castillo'},
+  obras:{name:'Gran constructor', desc:'Ten 8 edificios a la vez', metal:'bronce', sym:'castillo'},
+  maravilla:{name:'Maravilla', desc:'Construye una maravilla', metal:'plata', sym:'castillo'},
+  almirante:{name:'Almirante', desc:'Ten 8 barcos', metal:'plata', sym:'ancla'},
+  senor:{name:'Señor feudal', desc:'Ten un vasallo', metal:'plata', sym:'corona'},
+  renacimiento:{name:'Hombre del Renacimiento', desc:'Llega a la era Moderna', metal:'oro', sym:'sol'},
   erudito:{name:'Erudito', desc:'Completa una rama de mejoras', metal:'bronce', sym:'estrella'},
   facil:{name:'Primera victoria', desc:'Gana una partida', metal:'bronce', sym:'flor'},
   diario:{name:'Al día', desc:'Termina un desafío diario', metal:'bronce', sym:'sol'},
@@ -40,12 +44,16 @@ export function medalsFor(g, me) {
   if (g.stats.conq[me] >= 1) out.push('sangre');
   if (g.stats.caps[me] >= 1) out.push('capital');
   if (g.F.gold[me] >= 300) out.push('tesoro');
-  if (P.owner.filter((o, p) => o === me && P.bld[p]).length >= 5) out.push('obras');
+  if (P.owner.reduce((s, o, p) => s + (o === me ? buildingsAt(g, p).length : 0), 0) >= 8) out.push('obras');
+  if (P.wonder.some((w, p) => w && P.owner[p] === me)) out.push('maravilla');
+  if (g.F.ships[me] >= 8) out.push('almirante');
+  if (g.F.lord.some((l, x) => l === me && g.F.alive[x])) out.push('senor');
+  if (g.F.tech[me].reduce((a, b) => a + b, 0) >= 8) out.push('renacimiento');
   if (g.F.tech[me].some(l => l >= 3)) out.push('erudito');
   if (g.F.tech[me].every(l => l >= 3) && g.F.tech[me].length === TECHS.length) out.push('sabio');
   if (g.stats.conq[me] >= 10) out.push('conquistador');
   if (g.gens.some(x => x.f === me && x.lvl >= 2)) out.push('veterano');
-  if (g.st[me].filter((s, x) => s === ALLY && x !== me && g.F.alive[x]).length >= 2) out.push('aliados');
+  if (g.st[me].filter((s, x) => (s === ALLY || s === FED) && x !== me && g.F.alive[x]).length >= 2) out.push('aliados');
   if (g.turn >= 100 && g.F.alive[me]) out.push('aguante');
   if (won) {
     const d = g.rules.difficulty;
