@@ -18,7 +18,7 @@ De Wikimedia Commons, rasterizadas a 360×240 con `npm run flags`.
 | --- | --- | --- | --- |
 | Álava | [Flag of Álava.svg](https://commons.wikimedia.org/wiki/File:Flag_of_%C3%81lava.svg) | HansenBCN | CC BY-SA 4.0 |
 | Albacete | [Bandera provincia Albacete.svg](https://commons.wikimedia.org/wiki/File:Bandera_provincia_Albacete.svg) | Espanish AlB; SanchoPanzaXXI; HansenBCN | CC BY-SA 4.0 |
-| Alicante | [Flag of Alicante.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Alicante.svg) | Mutxamel, based on SanchoPanzaXXI's work | CC BY-SA 4.0 |
+| Alicante | [Flag maritime alicante.svg](https://commons.wikimedia.org/wiki/File:Flag_maritime_alicante.svg) | No machine-readable author provided. Banderas assumed (based on copyright claims). | Public domain |
 | Almería | [Flag Almería Province.svg](https://commons.wikimedia.org/wiki/File:Flag_Almer%C3%ADa_Province.svg) | Almju | CC BY-SA 4.0 |
 | Ávila | [Bandera de la provincia de Ávila.svg](https://commons.wikimedia.org/wiki/File:Bandera_de_la_provincia_de_%C3%81vila.svg) | Rastrojo (D•ES) | CC BY-SA 4.0 |
 | Badajoz | [Provincia de Badajoz - Bandera.svg](https://commons.wikimedia.org/wiki/File:Provincia_de_Badajoz_-_Bandera.svg) | HansenBCN | CC BY-SA 3.0 |
