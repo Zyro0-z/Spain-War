@@ -22,6 +22,15 @@ const iso = (/** @type {{plate:string}} */ p) => 'ES-' + (p.plate === 'OU' ? 'OR
 /** Comunidad uniprovincial (ISO de la comunidad) por si la provincia no tiene bandera propia. */
 const COMMUNITY = {'ES-M':'ES-MD', 'ES-O':'ES-AS', 'ES-S':'ES-CB', 'ES-LO':'ES-RI', 'ES-MU':'ES-MC', 'ES-NA':'ES-NC'};
 const FREE = /public domain|^pd|cc0|cc[- ]by(-sa)?|cc-by|attribution/i;
+/** Archivos conocidos que se prueban antes que Wikidata (donde Wikidata no tiene la bandera provincial). */
+const OVERRIDE = {
+  '03':['Bandera de la provincia de Alicante.svg', 'Flag of Alicante Province.svg'],
+  '12':['Bandera de la provincia de Castellón.svg', 'Flag of the province of Castellón.svg', 'Bandera de la Provincia de Castellón.svg'],
+  '15':['Bandeira da provincia da Coruña.svg', 'Flag of the province of A Coruña.svg', 'Bandera de la provincia de La Coruña.svg'],
+  '49':['Bandera de la provincia de Zamora.svg', 'Flag of the province of Zamora.svg', 'Flag Zamora Province.svg'],
+};
+/** Nombres que delatan una bandera de otro sitio. */
+const NOT_SPAIN = /(chinchipe|ecuador|argentin|m[eé]xico|colombia|venezuela|per[uú]|chile|filipinas|philippines|bolivia|cuba|honduras|municipi|ayuntamiento|concello|ajuntament)/i;
 
 const sleep = (/** @type {number} */ ms) => new Promise(r => setTimeout(r, ms));
 /**
@@ -50,7 +59,8 @@ async function searchFlag(name) {
   for (const q of [`Flag of the province of ${short}`, `Bandera de la provincia de ${short}`, `Flag of ${short}`, `Bandera de ${short}`]) {
     const d = await json('https://commons.wikimedia.org/w/api.php?action=query&format=json&list=search&srnamespace=6&srlimit=12&srsearch=' + encodeURIComponent(q));
     const hit = (d.query?.search || []).map((/** @type {{title:string}} */ x) => x.title.replace(/^File:/, ''))
-      .filter((/** @type {string} */ t) => /\.svg$/i.test(t) && /(flag|bandera|bandeira|bandiera)/i.test(t) && norm(t).includes(norm(short)) && !/(coat|escudo|map|mapa|locator|old|antigua|historic)/i.test(t))
+      .filter((/** @type {string} */ t) => /\.svg$/i.test(t) && /(flag|bandera|bandeira|bandiera)/i.test(t) && /(provinc|provínc|diputaci|deputaci)/i.test(t)
+        && norm(t).includes(norm(short)) && !NOT_SPAIN.test(t) && !/(coat|escudo|map|mapa|locator|old|antigua|historic)/i.test(t))
       .sort((/** @type {string} */ a, /** @type {string} */ b) => (/(provinc)/i.test(b) ? 1 : 0) - (/(provinc)/i.test(a) ? 1 : 0))[0];
     if (hit) return hit;
     await sleep(800);
@@ -97,7 +107,7 @@ async function main() {
     const code = iso(p);
     let file = flags[code] || flags[COMMUNITY[code]] || '';
     let info = null;
-    for (const cand of [file, '']) {
+    for (const cand of [...(/** @type {Record<string, string[]>} */ (OVERRIDE)[p.ine] || []), file, ''].filter((x, i, a) => x || i === a.length - 1)) {
       try {
         const f = cand || await searchFlag(p.name);
         if (!f) break;
