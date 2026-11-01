@@ -67,6 +67,11 @@ const SCENES = {
     const w = __eeg.war; w.g.P.u[w.me] = [10, 5, 0, 0]; w.g.P.troops[w.me] = 15; w.g.P.ready[w.me] = 15; w.refresh();
     const q = w.attackTargets(w.me)[0]; w.select(q); await sleep(400); document.querySelector('#aAtt2').click(); await sleep(500); document.querySelector('[data-tac="1"]').click(); await sleep(900); }`,
   gobierno:`async () => { __eeg.startWar({sc:'las47', me:__eeg.W.map.provinces.findIndex(x => x.name === 'Valencia'), diff:'normal', seed:'GOBIERNO'}); await ff(6); document.querySelector('#wDip').click(); await sleep(500); document.querySelector('[data-tab="council"]').click(); await sleep(900); }`,
+  saberes:`async () => { __eeg.startWar({sc:'las47', me:__eeg.W.map.provinces.findIndex(x => x.name === 'Valencia'), diff:'normal', seed:'SABERES'}); await sleep(900);
+    const w = __eeg.war; w.g.F.rp[w.me] = 34; w.g.F.know[w.me] = ['herreria', 'calzadas', 'gremios']; w.g.F.tech[w.me] = [1, 1, 0, 0]; w.refresh(); await sleep(300);
+    document.querySelector('#wSab').click(); await sleep(900); }`,
+  informe:`async () => { __eeg.startWar({sc:'las47', me:__eeg.W.map.provinces.findIndex(x => x.name === 'Valencia'), diff:'normal', seed:'INFORME'}); await sleep(900);
+    const w = __eeg.war; w.g.P.bld[w.me] = {mercado:2, granja:1, muralla:1, puerto:1}; w.refresh(); w.select(w.me); await sleep(500); document.querySelector('#cRep').click(); await sleep(900); }`,
   peninsula:`async () => { document.querySelector('#mWar').click(); await sleep(700); document.querySelector('[data-sc="peninsula"]').click(); await sleep(400);
     const s = document.querySelector('#wsSel'); s.value = '15'; s.dispatchEvent(new Event('change')); await sleep(1200); }`,
   bandera:`async () => { document.querySelector('#mWar').click(); await sleep(700); document.querySelector('details.adv summary').click(); await sleep(300);
