@@ -35,6 +35,8 @@ function ctx() {
   if (AC.state === 'suspended') AC.resume();
   return AC;
 }
+/** Salida de audio compartida (para la música). */
+export function audioOut() { const a = ctx(); return a && master ? {a, out:master, hall, noise:noise(a)} : null; }
 /** iOS solo deja sonar tras un toque: se desbloquea con el primero. */
 export function unlockAudio() {
   const once = () => {

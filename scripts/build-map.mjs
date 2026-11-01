@@ -204,11 +204,20 @@ async function main() {
     ...neutralEs.map(g => gc(/** @type {any} */ (topo.feature(t, g)))),
   ].filter(Boolean).join('');
 
+  // Portugal para el escenario de la península: Natural Earth con la frontera del IGN (así encaja sin huecos)
+  const ptGeom = countries.find(g => g.id === '620');
+  const neutralNoPt = [
+    ...countries.filter(g => g.id !== '620').map(g => gc(/** @type {any} */ (topo.feature(wt, g)))),
+    ...neutralEs.map(g => gc(/** @type {any} */ (topo.feature(t, g)))),
+  ].filter(Boolean).join('');
+  const pt = portugal(gc(/** @type {any} */ (topo.feature(wt, ptGeom))) || '', outer, land, provinces.length, 4 / kmPerUnit);
+  pt.neutral = neutralNoPt;
+
   const data = {
     v:1,
     w:W, h:H, kmPerUnit:r1(kmPerUnit * 100) / 100,
     credits:'Límites provinciales: © Instituto Geográfico Nacional de España (CC BY 4.0), vía es-atlas. Países vecinos: Natural Earth (dominio público), vía world-atlas.',
-    provinces, borders, outer, land, neutral,
+    provinces, borders, outer, land, neutral, pt,
   };
   validate(data);
   fs.mkdirSync(path.dirname(OUT), {recursive:true});
@@ -221,6 +230,131 @@ async function main() {
   console.log('Fronteras más cortas:', lengths.sort((a, b) => a[2] - b[2]).slice(0, 6).map(([a, b, k]) => `${a}–${b} ${k} km`).join(', '));
   const trev = provinces.find(p => p.ine === '09');
   console.log(`Burgos: ${trev?.parts} polígonos (incluye el Condado de Treviño)`);
+}
+
+/* ---------- Portugal ---------- */
+/** @param {string} d path de d3 @returns {{pts:number[][], closed:boolean}[]} */
+function parsePath(d) {
+  return d.split('M').filter(Boolean).map(s => ({closed:/Z\s*$/.test(s), pts:s.replace(/Z/g, '').split('L').map(p => p.split(',').map(Number))}));
+}
+const pathOf = (/** @type {number[][][]} */ lines, closed = false) => lines.filter(l => l.length > 1).map(l => 'M' + l.map(p => `${r1(p[0])},${r1(p[1])}`).join('L') + (closed ? 'Z' : '')).join('');
+/** Distancia de un punto a una polilínea (o anillo). @param {number[]} p @param {number[][]} line */
+function lineDist(p, line, closed = false) {
+  let m = Infinity;
+  const n = line.length;
+  for (let i = 0; i < (closed ? n : n - 1); i++) {
+    const [ax, ay] = line[i], [bx, by] = line[(i + 1) % n], dx = bx - ax, dy = by - ay, l = dx * dx + dy * dy;
+    const t = l ? Math.max(0, Math.min(1, ((p[0] - ax) * dx + (p[1] - ay) * dy) / l)) : 0;
+    m = Math.min(m, Math.hypot(p[0] - ax - t * dx, p[1] - ay - t * dy));
+  }
+  return m;
+}
+const ringArea = (/** @type {number[][]} */ r) => { let a = 0; for (let i = 0, j = r.length - 1; i < r.length; j = i++) a += (r[j][0] + r[i][0]) * (r[j][1] - r[i][1]); return a / 2; };
+const len = (/** @type {number[][]} */ l) => { let s = 0; for (let i = 1; i < l.length; i++) s += Math.hypot(l[i][0] - l[i - 1][0], l[i][1] - l[i - 1][1]); return s; };
+/** Tramos contiguos de puntos marcados (rellenando huecos cortos). @param {boolean[]} f */
+function runs(f, gap = 3) {
+  const g = [...f];
+  for (let i = 0; i < g.length;) { // huecos de pocos puntos entre dos tramos marcados
+    if (g[i]) { i++; continue; }
+    let j = i; while (j < g.length && !g[j]) j++;
+    if (i > 0 && j < g.length && j - i <= gap) for (let k = i; k < j; k++) g[k] = true;
+    i = j;
+  }
+  /** @type {[number, number][]} */ const out = [];
+  for (let i = 0; i < g.length;) { if (!g[i]) { i++; continue; } let j = i; while (j < g.length && g[j]) j++; out.push([i, j - 1]); i = j; }
+  return {g, out};
+}
+/** Tramo cíclico más largo de puntos marcados en un anillo. @param {boolean[]} f @returns {[number, number]} inicio y fin (incluidos) */
+function cyclicRun(f) {
+  const n = f.length, start = f.findIndex(v => !v);
+  if (start < 0) throw new Error('Todo el anillo es frontera');
+  let best = [-1, -1], bl = 0;
+  for (let k = 0; k < n;) {
+    const i = (start + k) % n;
+    if (!f[i]) { k++; continue; }
+    let L = 0; while (L < n && f[(start + k + L) % n]) L++;
+    if (L > bl) { bl = L; best = [i, (i + L - 1) % n]; }
+    k += L;
+  }
+  if (bl === 0) throw new Error('No hay frontera en el anillo');
+  return /** @type {[number, number]} */ (best);
+}
+/** Puntos de un anillo de i a j (cíclico, incluidos). @param {number[][]} r @param {number} i @param {number} j */
+const arc = (r, i, j) => { const o = []; for (let k = i; ; k = (k + 1) % r.length) { o.push(r[k]); if (k === j) break; } return o; };
+const near = (/** @type {number[]} */ a, /** @type {number[]} */ b, e = 1.2) => Math.hypot(a[0] - b[0], a[1] - b[1]) <= e;
+/**
+ * Portugal como provincia extra: su frontera con cada provincia española sale del contorno exterior del IGN
+ * y su costa de Natural Earth. Devuelve también la costa unida de la península.
+ * @param {string} ptD @param {string[]} outer @param {string} land @param {number} idx @param {number} T tolerancia (unidades)
+ */
+function portugal(ptD, outer, land, idx, T) {
+  const ring = parsePath(ptD).map(r => r.pts).sort((a, b) => Math.abs(ringArea(b)) - Math.abs(ringArea(a)))[0];
+  /** @type {Record<string, string>} */ const borders = {};
+  /** @type {Record<number, string>} */ const outer2 = {};
+  /** @type {number[][][]} */ const pieces = [];
+  const adj = [];
+  outer.forEach((d, i) => {
+    const lines = parsePath(d).map(l => l.pts), bl = [], rest = [];
+    for (const l of lines) {
+      const {g, out} = runs(l.map(p => lineDist(p, ring, true) < T));
+      const keep = out.filter(([a, b]) => len(l.slice(a, b + 1)) > 3);
+      if (!keep.length) { rest.push(l); continue; }
+      for (const [a, b] of keep) bl.push(l.slice(a, b + 1));
+      // lo que no es frontera con Portugal sigue siendo costa o frontera exterior
+      let s = 0;
+      for (const [a, b] of keep) { if (a > s) rest.push(l.slice(s, a + 1)); s = b; }
+      if (s < l.length - 1) rest.push(l.slice(s));
+      void g;
+    }
+    if (!bl.length) return;
+    adj.push(i); pieces.push(...bl);
+    borders[`${i}-${idx}`] = pathOf(bl);
+    outer2[i] = pathOf(rest);
+  });
+  // la frontera entera, de punta a punta
+  const left = pieces.map(p => p.slice());
+  const ends = (/** @type {number[][]} */ p) => [p[0], p[p.length - 1]];
+  const isEnd = (/** @type {number[]} */ pt, /** @type {number} */ self) => left.some((q, k) => k !== self && ends(q).some(e => near(e, pt)));
+  let k0 = left.findIndex((p, k) => !isEnd(p[0], k) || !isEnd(p[p.length - 1], k));
+  if (k0 < 0) k0 = 0;
+  let line = left.splice(k0, 1)[0];
+  if (isEnd(line[0], -1)) line.reverse();
+  while (left.length) {
+    const e = line[line.length - 1];
+    const k = left.findIndex(p => near(p[0], e) || near(p[p.length - 1], e));
+    if (k < 0) throw new Error(`Frontera con Portugal discontinua (${left.length} tramos sueltos)`);
+    const q = left.splice(k, 1)[0];
+    if (!near(q[0], e)) q.reverse();
+    line = line.concat(q.slice(1));
+  }
+  // Portugal: costa de Natural Earth + frontera del IGN
+  const [a, b] = cyclicRun(ring.map(p => lineDist(p, line) < T));
+  const coast = arc(ring, (b + 1) % ring.length, (a - 1 + ring.length) % ring.length);
+  const last = coast[coast.length - 1], first = coast[0];
+  const bd = Math.hypot(line[0][0] - last[0], line[0][1] - last[1]) <= Math.hypot(line[line.length - 1][0] - last[0], line[line.length - 1][1] - last[1]) ? line : [...line].reverse();
+  const pr = coast.concat(bd);
+  void first;
+  // costa de la península entera: la frontera desaparece
+  const lr = parsePath(land).map(r => r.pts), mi = lr.reduce((m, r, i) => Math.abs(ringArea(r)) > Math.abs(ringArea(lr[m])) ? i : m, 0), sr = lr[mi];
+  const [sa, sb] = cyclicRun(sr.map(p => lineDist(p, line) < .3));
+  const spain = arc(sr, (sb + 1) % sr.length, (sa - 1 + sr.length) % sr.length), se = spain[spain.length - 1];
+  const c2 = Math.hypot(coast[0][0] - se[0], coast[0][1] - se[1]) <= Math.hypot(last[0] - se[0], last[1] - se[1]) ? coast : [...coast].reverse();
+  const land2 = lr.map((r, i) => i === mi ? spain.concat(c2) : r);
+  // datos de la provincia
+  const d = pathOf([pr], true), rs = rings(d);
+  const xs = pr.map(p => p[0]), ys = pr.map(p => p[1]), bbox = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+  const A = ringArea(pr);
+  let cx = 0, cy = 0;
+  for (let i = 0, j = pr.length - 1; i < pr.length; j = i++) { const f = pr[j][0] * pr[i][1] - pr[i][0] * pr[j][1]; cx += (pr[j][0] + pr[i][0]) * f; cy += (pr[j][1] + pr[i][1]) * f; }
+  cx /= 6 * A; cy /= 6 * A;
+  const pole = poleOf(rs, bbox);
+  outer2[idx] = pathOf([coast]);
+  console.log(`Portugal: frontera de ${Math.round(len(line))} unidades con ${adj.length} provincias, costa de ${coast.length} puntos`);
+  return {
+    province:{i:idx, ine:'PT', name:'Portugal', plate:'PT', d, c:[r1(cx), r1(cy)], label:[r1(pole.p[0]), r1(pole.p[1])], room:r1(pole.r),
+      bbox:bbox.map(r1), area:Math.round(Math.abs(A)), parts:1, adj},
+    borders, outer:outer2, land:pathOf(land2, true), neutral:'',
+  };
 }
 
 /* ---------- Relieve sombreado ---------- */
@@ -245,6 +379,10 @@ const RANGES = [
   {h:.5, w:28, line:[[-1.95, 40.25]]}, // Serranía de Cuenca
   {h:.5, w:24, line:[[-0.3, 40.55]]}, // Maestrazgo
   {h:.35, w:20, line:[[0.9, 41.3], [1.6, 41.6], [2.3, 41.85], [2.7, 42.1]]}, // Cordilleras costeras catalanas
+  {h:.8, w:20, line:[[-7.95, 40.2], [-7.6, 40.33], [-7.3, 40.45]]}, // Serra da Estrela
+  {h:.55, w:16, line:[[-8.35, 41.85], [-8.0, 41.78]]}, // Peneda-Gerês
+  {h:.45, w:16, line:[[-7.95, 41.15], [-7.8, 41.35]]}, // Serra do Marão
+  {h:.3, w:14, line:[[-8.6, 37.32], [-8.1, 37.25], [-7.7, 37.3]]}, // Monchique y Caldeirão
 ];
 /** PNG en escala de grises con alfa (tipo 4), sin dependencias. @param {number} w @param {number} h @param {Uint8Array} ga */
 function png(w, h, ga) {

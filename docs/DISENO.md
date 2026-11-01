@@ -82,5 +82,54 @@ Al atacar a alguien en paz se le declara la guerra. Sus aliados entran en la gue
 
 ## Escenarios
 
-Las 47 provincias · Comunidades autónomas (15) · Reinos medievales (c. 1200) · Península con Portugal ·
-Tu comunidad · Tu provincia contra sus vecinas · Campaña · Desafío diario.
+| Escenario | Bandos | Notas |
+|---|---|---|
+| Las 47 | 47 | Cada provincia es un bando. |
+| Comunidades | 15 | Capital en la capital autonómica. |
+| Reinos | 7 | Hacia 1200, con colores propios. |
+| Península | 16 | Las comunidades y Portugal. Portugal es la provincia 47 (solo existe en este escenario): costa de Natural Earth y frontera del IGN, así encaja sin huecos. Nivel de población 6, sierra y costa. |
+| Tu región | 2–9 | Tu comunidad y las que tocan con ella. El resto del mapa queda fuera de juego (gris, sin nombre ni fichas). |
+| Tu provincia | 3–9 | Tu provincia y sus vecinas, una por bando. |
+
+Reglas a medida: tropas al empezar 3 · 6 · 10 (+4 en las capitales), oro ×0,75 · ×1 · ×1,5, rasgo del líder
+elegido o al azar. **Bando propio**: sustituye el nombre y la bandera del bando elegido; el color del mapa es
+el primer color de la bandera que no sea casi blanco ni casi negro.
+
+## Campaña y desafío diario
+
+Ocho misiones encadenadas (cada una se abre al ganar la anterior). Semilla fija por misión. Estrellas: 3 si
+ganas en ≤ T₃ turnos, 2 si en ≤ T₂, 1 si ganas.
+
+| # | Misión | Escenario · bando | Dificultad · victoria | T₃ / T₂ |
+|---|---|---|---|---|
+| 1 | El primer paso | Tu provincia · Soria | Fácil · dominación | 14 / 22 |
+| 2 | Tierra de frontera | Tu provincia · Teruel | Normal · dominación | 16 / 26 |
+| 3 | La corona de Aragón | Tu región · Aragón | Normal · dominación | 26 / 40 |
+| 4 | Los cinco reinos | Reinos · Navarra | Normal · capitales | 30 / 46 |
+| 5 | La pluma y la espada | Comunidades · Madrid | Normal · diplomática | 30 / 46 |
+| 6 | El último reino | Reinos · Granada | Difícil · dominación | 45 / 70 |
+| 7 | Iberia | Península · Portugal | Normal · dominación | 50 / 80 |
+| 8 | Las 47 | Las 47 · Soria | Difícil · capitales | 50 / 80 |
+
+**Desafío diario**: la fecha local (AAAA-MM-DD) siembra el escenario, el bando, la dificultad (Normal o
+Difícil) y la semilla de la partida, así todo el mundo juega lo mismo ese día. 30 turnos y victoria por
+puntos: 10 por provincia, 1 por cada 5 tropas, 25 por capital y 1 por cada 10 de oro. Se guarda la mejor
+marca del día y se puede compartir.
+
+## Crónica, final y logros
+
+- La crónica guarda los sucesos destacados (guerras, traiciones, capitales tomadas, eliminaciones, acuerdos,
+  revueltas y la victoria), como mucho 160. Al empezar cada año sale un periódico con el titular de más peso
+  (victoria 100, eliminación 80, capital 60, anexión 60, traición 50, alianza 35, guerra 30, paz 25,
+  tributo 25, pacto 20, revuelta 15; +25 si te afecta), hasta seis breves y el reparto del poder.
+- El final muestra la gráfica de provincias por turno (tú y los cuatro bandos que más crecieron) y una
+  repetición del mapa a partir del historial de dueños (un toque la salta).
+- 20 logros en bronce, plata y oro (primera conquista, capital enemiga, 300 de oro, 5 edificios, ramas de
+  mejoras, generales de nivel 2, dos alianzas, sobrevivir 100 turnos, ganar en cada dificultad, en menos de
+  40 turnos, sin traiciones, por diplomacia, con una sola provincia, la península y la campaña entera).
+
+## Música
+
+Síntesis con WebAudio, sin ficheros. En paz: re menor, i–VI–III–VII, acordes suaves y un arpegio pulsado.
+En guerra: cadencia andaluza (i–VII–VI–V) con bajo y tambores. El ánimo va de 0 a 1 según las guerras
+abiertas y cambia a medio camino en cada compás. Se apaga con el sonido o con su interruptor.

@@ -84,12 +84,43 @@ const SCENES = {
     __eeg.onPhase = (name, m) => { if (name === 'choose' && !hit) { hit = true; m.clock.pause(); } };
     await host.start('SALA0'); await host.advance();
     await waitFor(() => hit, 90000); __eeg.match.clock.advance(2500); __eeg.match.view.invalidate(); await sleep(600); }`,
+  // Conquista (etapas 1–3)
+  guerra:`async () => { __eeg.startWar({sc:'las47', me:26, diff:'normal', seed:'GUERRA'}); await ff(8);
+    const w = __eeg.war; w.select(w.g.P.owner.indexOf(w.me)); await sleep(1400); }`,
+  peninsula:`async () => { document.querySelector('#mWar').click(); await sleep(700); document.querySelector('[data-sc="peninsula"]').click(); await sleep(400);
+    const s = document.querySelector('#wsSel'); s.value = '15'; s.dispatchEvent(new Event('change')); await sleep(1200); }`,
+  bandera:`async () => { document.querySelector('#mWar').click(); await sleep(700); document.querySelector('details.adv summary').click(); await sleep(300);
+    document.querySelector('#wsEdit').click(); await sleep(500);
+    for (const q of ['[data-l="cruz"]', '[data-k="1"]', '[data-c="#F1BF00"]', '[data-s="castillo"]']) { document.querySelector(q).click(); await sleep(80); }
+    document.querySelector('#feName').value = 'Reino de Castilla'; await sleep(700); }`,
+  cronica:`async () => { __eeg.startWar({sc:'las47', me:26, diff:'dificil', seed:'CRONICA'}); await sim(12);
+    const w = __eeg.war; w.news(1, w.g.turn, 'Crónica del año 1'); await sleep(900); }`,
+  final:`async () => { __eeg.startWar({sc:'vecinas', me:0, diff:'facil', seed:'FINAL', center:__eeg.W.map.provinces.find(p => p.name === 'Soria').i}); await sim(6);
+    const w = __eeg.war, g = w.g, ch = String.fromCharCode(48 + w.me);
+    for (let i = 0; i < g.P.owner.length; i++) if (g.P.active[i] && g.P.owner[i] !== w.me) {
+      const h = g.hist[g.hist.length - 1].split(''); g.hist.push(h.join('')); g.hist.push(h.join('')); h[i] = ch; g.hist.push(h.join(''));
+      g.P.owner[i] = w.me; g.stats.conq[w.me]++; g.stats.won[w.me]++; }
+    g.turn = g.hist.length; g.stats.peak[w.me] = g.P.active.filter(Boolean).length; g.over = true; g.winner = w.me;
+    w.view.setOwners(g.P.owner); w.end(); await sleep(3400); }`,
+  campana:`async () => { Object.assign(__eeg.S.campaign, {m1:3, m2:2, m3:1}); __eeg.menu(); await sleep(500); document.querySelector('#mCamp').click(); await sleep(800); }`,
+  logros:`async () => { for (const k of ['sangre', 'capital', 'tesoro', 'facil', 'conquistador', 'veterano', 'normal', 'dificil', 'iberia']) __eeg.S.medals[k] = 1; __eeg.menu(); await sleep(500);
+    document.querySelector('#mMedals').click(); await sleep(800); }`,
+  pergamino:`async () => { __eeg.look({theme:'pergamino'}); __eeg.startWar({sc:'reinos', me:1, diff:'facil', seed:'PERGAMINO'}); await sim(6);
+    const w = __eeg.war; w.select(w.g.F.capital[w.me]); await sleep(1400); }`,
+  tutorial:`async () => { document.querySelector('#mTut').click(); await sleep(1500); const w = __eeg.war; w.select(w.g.P.owner.indexOf(w.me)); await sleep(900); }`,
   victoria:`async () => { __eeg.start('PROVINCIA', {skip:520}); __eeg.match.clock.speed = 5;
     await waitFor(() => document.body.dataset.phase === 'victory', 180000); await sleep(2600); }`,
 };
 // Congela la partida en una fase exacta: pausa el reloj en el acto, avanza X ms de partida y N fotogramas de partículas.
 const HELPERS = `window.sleep = ms => new Promise(r => setTimeout(r, ms));
 window.waitFor = (f, t = 30000) => new Promise((res, rej) => { const t0 = Date.now(); const k = () => { try { if (f()) return res(true); } catch (e) {} if (Date.now() - t0 > t) return rej(new Error('timeout')); setTimeout(k, 50); }; k(); });
+window.ff = async n => { const w = __eeg.war, m0 = __eeg.S.settings.motion; __eeg.look({motion:'reduced'}); w.speed = 5;
+  const shut = setInterval(() => { const x = document.querySelector('#sheet:not([hidden]) [data-x]'); if (x) x.click(); }, 300);
+  for (let i = 0; i < n && !w.g.over; i++) await w.endTurn();
+  await sleep(900); clearInterval(shut); __eeg.look({motion:m0}); await sleep(300); };
+window.sim = async n => { const {endTurn} = await import('./js/conquest/turn.js'); const w = __eeg.war;
+  for (let i = 0; i < n && !w.g.over; i++) w.g = endTurn(w.geo, w.g).g;
+  w.view.setOwners(w.g.P.owner, w.g.F.alive.map(a => !a)); w.refresh(); w.renderBar(); await sleep(400); };
 window.freezeAt = async (phase, ms, fxFrames, speed, t = 60000) => {
   let hit = false;
   __eeg.onPhase = (name, m) => { if (name === phase && !hit) { hit = true; m.clock.pause(); __eeg.freezeFx(true); } };
@@ -152,7 +183,7 @@ async function withWebKit(base) {
       const ref = Object.values(fr)[0];
       await new Promise(r => setTimeout(r, 600));
       await wd(port, 'POST', `/session/${id}/frame`, {id:fr});
-      await wd(port, 'POST', `/session/${id}/execute/async`, {script:`const done = arguments[arguments.length - 1]; (async () => { const t0 = Date.now(); while (!(window.__eeg && document.querySelector('#menu .mode'))) { if (Date.now() - t0 > 20000) break; await new Promise(r => setTimeout(r, 100)); } ${HELPERS} try { await (${fn})(); done('ok'); } catch (e) { done('ERR ' + e); } })();`, args:[]});
+      const res = await wd(port, 'POST', `/session/${id}/execute/async`, {script:`const done = arguments[arguments.length - 1]; (async () => { const t0 = Date.now(); while (!(window.__eeg && document.querySelector('#menu .mode'))) { if (Date.now() - t0 > 20000) break; await new Promise(r => setTimeout(r, 100)); } ${HELPERS} try { await (${fn})(); done('ok'); } catch (e) { done('ERR ' + e); } })();`, args:[]});
       const vp = await wd(port, 'POST', `/session/${id}/execute/sync`, {script:'return [innerWidth, innerHeight, devicePixelRatio]', args:[]});
       if (name === 'perf') { console.log('perf webkit', JSON.stringify(await wd(port, 'POST', `/session/${id}/execute/sync`, {script:'return window.__perf', args:[]}))); await wd(port, 'DELETE', `/session/${id}`); continue; }
       await wd(port, 'POST', `/session/${id}/frame/parent`, {});
@@ -164,7 +195,7 @@ async function withWebKit(base) {
       await crop(full, path.join(OUT, `${name}.png`), rect);
       if (!process.env.KEEP_FULL) fs.unlinkSync(full);
       void ref;
-      console.log(name, 'webkit', vp.join('×'));
+      console.log(name, 'webkit', vp.join('×'), res === 'ok' ? '' : res);
       await wd(port, 'DELETE', `/session/${id}`);
     }
   } finally { drv.kill(); xvfb.kill(); }

@@ -9,13 +9,28 @@ import {sound} from '../fx.js';
 import {cleanSeed, newSeed} from '../engine/rng.js';
 import {$, esc, openSheet, closeSheet, toast} from './dom.js';
 import {settingsSheet} from './settings.js';
+import {MISSIONS, unlocked, today} from '../conquest/campaign.js';
+import {medalsSheet} from './medals.js';
+import {MEDALS} from '../conquest/medals.js';
+import {starSvg} from './conquest.js';
+
+/** Arte de las losetas del menú (trazo dorado). */
+const TILE = {
+  camp:'<svg viewBox="0 0 40 40" class="tart" aria-hidden="true"><path d="M10 35V5" stroke-width="2.4"/><path d="M10 6h20l-5 6 5 6H10" fill="rgba(242,201,76,.25)"/><path d="M19 9.2l1.1 2.3 2.5.3-1.8 1.7.5 2.5-2.3-1.2-2.2 1.2.4-2.5-1.8-1.7 2.5-.3Z" fill="currentColor" stroke="none"/></svg>',
+  daily:'<svg viewBox="0 0 40 40" class="tart" aria-hidden="true"><rect x="6" y="9" width="28" height="25" rx="4" fill="rgba(242,201,76,.18)"/><path d="M6 16h28M13 5v7M27 5v7"/><circle cx="20" cy="25" r="4"/><path d="M20 18.5v1.5M20 30v1.5M13.5 25H15M25 25h1.5"/></svg>',
+  tut:'<svg viewBox="0 0 40 40" class="tart" aria-hidden="true"><circle cx="20" cy="20" r="14" fill="rgba(242,201,76,.16)"/><path d="M20 9v3M20 28v3M9 20h3M28 20h3"/><path d="M24.5 15.5 21.5 21.5 15.5 24.5 18.5 18.5Z" fill="currentColor"/></svg>',
+};
 
 /**
  * @param {{colors:string[], map:{provinces:{name:string}[]}}} world
- * @param {{onNormal:(seed?:string)=>void, onLook:()=>void, onWar:()=>void, onLoad:(id:string)=>void, onOnline:()=>void, onRoom:()=>void}} hooks
+ * @param {{onNormal:(seed?:string)=>void, onLook:()=>void, onWar:()=>void, onLoad:(id:string)=>void, onOnline:()=>void, onRoom:()=>void,
+ *   onMission:(id:string)=>void, onDaily:()=>void, onTutorial:()=>void}} hooks
  */
 export function renderMenu(world, hooks) {
   const m = $('#menu'), last = S.saves.find(x => !x.over);
+  const stars = MISSIONS.reduce((a, x) => a + (S.campaign[x.id] || 0), 0), cur = MISSIONS.findIndex((x, i) => unlocked(S.campaign, i) && !S.campaign[x.id]);
+  const day = today(), best = S.daily.day === day && S.daily.best >= 0 ? S.daily.best : -1;
+  const medals = Object.keys(S.medals).filter(k => MEDALS[k]).length;
   m.hidden = false;
   m.innerHTML = `<div class="menu-in">
     <div class="title">
@@ -31,6 +46,11 @@ export function renderMenu(world, hooks) {
       <span><h3>Conquista</h3><p>Tu bando contra el resto: tropas, oro, diplomacia y guerra.</p><span class="pill">Fácil · Normal · Difícil</span></span>
       <span class="go">${icon('play')}</span>
     </button>
+    <div class="tiles">
+      <button class="tile glass" id="mCamp">${TILE.camp}<b>Campaña</b><small><span class="num">${stars}/${MISSIONS.length * 3}</span> ${starSvg(true)}</small></button>
+      <button class="tile glass" id="mDaily">${TILE.daily}<b>Desafío</b><small>${best >= 0 ? `Hoy: <span class="num">${best}</span>` : 'El de hoy'}</small></button>
+      <button class="tile glass${S.tutorial ? '' : ' hot'}" id="mTut">${TILE.tut}<b>Tutorial</b><small>${S.tutorial ? 'Repasar' : 'Empieza aquí'}</small></button>
+    </div>
     <button class="mode glass" id="mOnline" style="--mc:rgba(127,216,232,.16)">
       <span class="art">${onlineArt([world.colors[0], world.colors[27], world.colors[40]])}</span>
       <span><h3>Multijugador</h3><p>De 2 a 8 móviles en la misma partida, con código o QR.</p><span class="pill">${icon('wifi')}Necesita internet</span></span>
@@ -43,7 +63,7 @@ export function renderMenu(world, hooks) {
     </button>
     <div class="row3">
       <button class="btn ghost sm" id="mSaves">${icon('map')}Partidas</button>
-      <button class="btn ghost sm" id="mSeed">${icon('seed')}Semilla</button>
+      <button class="btn ghost sm" id="mMedals">${icon('crown')}Logros <span class="num">${medals}</span></button>
       <button class="btn ghost sm" id="mSet">${icon('gear')}Ajustes</button>
     </div>
     <p class="credits">Conquista y Espectador funcionan sin conexión.<br>Mapa: © Instituto Geográfico Nacional (CC BY 4.0) · Natural Earth</p>
@@ -53,23 +73,66 @@ export function renderMenu(world, hooks) {
   $('#mOnline').onclick = () => { sound('tap'); hooks.onOnline(); };
   const c = $('#mCont'); if (c && last) c.onclick = () => { sound('tap'); hooks.onLoad(last.id); };
   const rm = $('#mRoom'); if (rm) rm.onclick = () => { sound('tap'); hooks.onRoom(); };
-  $('#mSet').onclick = () => { sound('tap'); settingsSheet(hooks.onLook); };
+  $('#mSet').onclick = () => { sound('tap'); settingsSheet(hooks.onLook, () => seedSheet(hooks)); };
+  $('#mMedals').onclick = () => { sound('tap'); medalsSheet(); };
+  $('#mCamp').onclick = () => { sound('tap'); campaignSheet(hooks, cur); };
+  $('#mDaily').onclick = () => { sound('tap'); dailySheet(hooks); };
+  $('#mTut').onclick = () => { sound('tap'); hooks.onTutorial(); };
   $('#mSaves').onclick = () => { sound('tap'); savesSheet(hooks); };
-  $('#mSeed').onclick = () => {
-    sound('tap');
-    openSheet({title:'Semilla', body:`
-      <p class="note" style="margin:0 4px 10px">Para el modo espectador: la semilla decide todas las tiradas y la partida se repite igual en cualquier móvil.</p>
-      <input class="field" id="sdIn" maxlength="16" placeholder="${esc(newSeed())}" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Semilla">
-      <div style="height:12px"></div>
-      <button class="btn" id="sdGo">${icon('play')}Mirar con esta semilla</button>`,
-      mount:el => {
-        const inp = /** @type {HTMLInputElement} */ (el.querySelector('#sdIn'));
-        /** @type {HTMLElement} */ (el.querySelector('#sdGo')).onclick = () => {
-          const s = cleanSeed(inp.value) || cleanSeed(inp.placeholder);
-          closeSheet(); hooks.onNormal(s);
-        };
-      }});
-  };
+}
+/** Semilla para el modo espectador. @param {{onNormal:(seed?:string)=>void}} hooks */
+function seedSheet(hooks) {
+  openSheet({title:'Semilla', body:`
+    <p class="note" style="margin:0 4px 10px">Para el modo espectador: la semilla decide todas las tiradas y la partida se repite igual en cualquier móvil.</p>
+    <input class="field" id="sdIn" maxlength="16" placeholder="${esc(newSeed())}" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Semilla">
+    <div style="height:12px"></div>
+    <button class="btn" id="sdGo">${icon('play')}Mirar con esta semilla</button>`,
+    mount:el => {
+      const inp = /** @type {HTMLInputElement} */ (el.querySelector('#sdIn'));
+      /** @type {HTMLElement} */ (el.querySelector('#sdGo')).onclick = () => {
+        const s = cleanSeed(inp.value) || cleanSeed(inp.placeholder);
+        closeSheet(); hooks.onNormal(s);
+      };
+    }});
+}
+/** Campaña: misiones con estrellas. @param {{onMission:(id:string)=>void}} hooks @param {number} cur */
+function campaignSheet(hooks, cur) {
+  openSheet({title:'Campaña', body:`
+    <p class="note" style="margin:0 4px 10px">Ocho misiones encadenadas. Gana deprisa para llevarte las tres estrellas.</p>
+    <div class="grp">${MISSIONS.map((x, i) => {
+      const open = unlocked(S.campaign, i), st = S.campaign[x.id] || 0;
+      return `<button class="rowi mis${i === cur ? ' cur' : ''}" data-m="${i}" ${open ? '' : 'disabled'}><span class="mn num">${i + 1}</span><div class="l">${esc(x.name)}<small>${open ? esc(SCENARIOS[/** @type {'las47'} */ (x.sc)].title) + ' · ' + esc(DIFFICULTY[x.diff].name) : 'Gana la misión anterior'}</small></div><span class="st3">${[0, 1, 2].map(k => starSvg(k < st)).join('')}</span></button>`;
+    }).join('')}</div>`,
+    mount:el => el.querySelectorAll('[data-m]').forEach(b => /** @type {HTMLElement} */ (b).onclick = () => {
+      const i = +(/** @type {HTMLElement} */ (b).dataset.m || 0); sound('tap'); closeSheet();
+      setTimeout(() => briefSheet(hooks, i), 300);
+    })});
+}
+/** @param {{onMission:(id:string)=>void}} hooks @param {number} i */
+function briefSheet(hooks, i) {
+  const x = MISSIONS[i], vic = {dominacion:'Conquista todas las provincias en juego', capitales:'Toma la mitad de las capitales', diplomatica:'30 % del mapa y pacto o alianza con todos', puntos:'La mejor puntuación'};
+  openSheet({title:`Misión ${i + 1}`, body:`
+    <h4 class="brief-t">${esc(x.name)}</h4>
+    <p class="brief-p">${esc(x.brief)}</p>
+    <div class="grp">
+      <div class="rowi">${icon('map')}<div class="l">Escenario<small>${esc(SCENARIOS[/** @type {'las47'} */ (x.sc)].title)} · ${esc(DIFFICULTY[x.diff].name)}</small></div></div>
+      <div class="rowi">${icon('flag')}<div class="l">Objetivo<small>${vic[/** @type {'puntos'} */ (x.victory)]}</small></div></div>
+      <div class="rowi">${starSvg(true)}<div class="l">Estrellas<small>Tres en ${x.stars[0]} turnos o menos, dos en ${x.stars[1]}</small></div></div>
+    </div>
+    <button class="btn" id="bGo">${icon('swords')}Empezar la misión</button>`,
+    mount:el => { /** @type {HTMLElement} */ (el.querySelector('#bGo')).onclick = () => { sound('lock'); closeSheet(); hooks.onMission(x.id); }; }});
+}
+/** Desafío diario. @param {{onDaily:()=>void}} hooks */
+function dailySheet(hooks) {
+  const day = today(), best = S.daily.day === day && S.daily.best >= 0 ? S.daily.best : -1;
+  openSheet({title:'Desafío del día', body:`
+    <p class="brief-p">Cada día, la misma partida para todo el mundo: mismo escenario, mismo bando y mismos dados. Tienes 30 turnos para sumar todos los puntos que puedas.</p>
+    <div class="grp">
+      <div class="rowi">${icon('target')}<div class="l">Puntos<small>10 por provincia, 25 por capital, más tropas y oro</small></div></div>
+      <div class="rowi">${icon('crown')}<div class="l">Tu mejor marca de hoy<small>${best >= 0 ? best + ' puntos' : 'Aún no has jugado'}</small></div></div>
+    </div>
+    <button class="btn" id="dGo">${icon('swords')}Jugar el desafío</button>`,
+    mount:el => { /** @type {HTMLElement} */ (el.querySelector('#dGo')).onclick = () => { sound('lock'); closeSheet(); hooks.onDaily(); }; }});
 }
 /** Partidas de conquista guardadas. @param {{onLoad:(id:string)=>void}} hooks */
 function savesSheet(hooks) {

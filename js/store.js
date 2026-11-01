@@ -7,7 +7,8 @@ export const VERSION = 1;
 /**
  * @typedef {object} Settings
  * @property {boolean} sound
- * @property {'marina'|'atlas'} theme
+ * @property {'marina'|'atlas'|'pergamino'|'tactico'|'minimal'} theme
+ * @property {boolean} music música en la conquista
  * @property {'full'|'reduced'} motion
  * @property {boolean} contrast
  * @property {'auto'|number} textSize
@@ -41,8 +42,12 @@ export const VERSION = 1;
  * @property {{id:string, name:string}} profile
  * @property {Online|null} online
  * @property {{me:number, level:string}} solo últimas elecciones del modo un jugador
- * @property {{scenario:string, me:number, diff:string, rules?:any}} war últimas elecciones del modo conquista
+ * @property {{scenario:string, me:number, diff:string, rules?:any, center?:number, custom?:{on:boolean, name:string, flag:any}}} war últimas elecciones del modo conquista
  * @property {WarSave[]} saves partidas de conquista guardadas (máximo 5)
+ * @property {Record<string, number>} medals logros ganados (fecha)
+ * @property {Record<string, number>} campaign estrellas por misión
+ * @property {{day:string, best:number, plays:number}} daily mejor puntuación del desafío de hoy
+ * @property {boolean} tutorial ya se ha visto el tutorial
  */
 /**
  * @typedef {object} WarSave
@@ -61,7 +66,7 @@ export const VERSION = 1;
 export function fresh() {
   return {
     v:VERSION,
-    settings:{sound:true, theme:'marina', motion:'full', contrast:false, textSize:'auto', speed:1, labels:true, fps:false},
+    settings:{sound:true, music:true, theme:'marina', motion:'full', contrast:false, textSize:'auto', speed:1, labels:true, fps:false},
     stats:{games:0, finished:0, rounds:0},
     current:null,
     history:[],
@@ -70,16 +75,19 @@ export function fresh() {
     solo:{me:-1, level:'estratega'},
     war:{scenario:'las47', me:-1, diff:'facil'},
     saves:[],
+    medals:{}, campaign:{}, daily:{day:'', best:-1, plays:0}, tutorial:false,
   };
 }
 
+/** Objeto de números (logros, estrellas). @param {any} o @returns {Record<string, number>} */
+const obj = o => o && typeof o === 'object' && !Array.isArray(o) ? Object.fromEntries(Object.entries(o).filter(([, v]) => typeof v === 'number')) : {};
 /** Completa lo que falte y corrige valores fuera de rango. @param {any} s @returns {State} */
 export function migrate(s) {
   const f = fresh();
   if (!s || typeof s !== 'object') return f;
   const st = {...f.settings, ...(s.settings || {})};
   if (![1, 2, 5].includes(st.speed)) st.speed = 1;
-  if (!['marina', 'atlas'].includes(st.theme)) st.theme = 'marina';
+  if (!['marina', 'atlas', 'pergamino', 'tactico', 'minimal'].includes(st.theme)) st.theme = 'marina';
   if (!['full', 'reduced'].includes(st.motion)) st.motion = 'full';
   if (st.textSize !== 'auto' && !(+st.textSize >= .8 && +st.textSize <= 1.6)) st.textSize = 'auto';
   const cur = s.current && s.current.game && Array.isArray(s.current.game.owner) ? s.current : null;
@@ -95,6 +103,9 @@ export function migrate(s) {
     solo:{...f.solo, ...(s.solo || {})},
     war:{...f.war, ...(s.war || {})},
     saves:Array.isArray(s.saves) ? s.saves.filter((/** @type {any} */ x) => x && x.game && x.game.v === 2 && Array.isArray(x.game.P?.owner)).slice(0, 5) : [],
+    medals:obj(s.medals), campaign:obj(s.campaign),
+    daily:s.daily && typeof s.daily.day === 'string' ? {day:s.daily.day, best:+s.daily.best || 0, plays:+s.daily.plays || 0} : f.daily,
+    tutorial:!!s.tutorial,
   };
 }
 

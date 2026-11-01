@@ -15,7 +15,10 @@ import {showSetup} from './ui/setup.js';
 import {showWarSetup} from './ui/warsetup.js';
 import {Conquest} from './ui/conquest.js';
 import {geoOf, createGame} from './conquest/engine.js';
-import {scenario} from './conquest/scenarios.js';
+import {scenario, withPortugal, needsPortugal} from './conquest/scenarios.js';
+import {bannerColor} from './flagmaker.js';
+import {MISSIONS, daily, today} from './conquest/campaign.js';
+import {Tutor} from './ui/tutorial.js';
 import {onlineSheet, resumeOnline, onlineMatch, onlineRoom} from './ui/online.js';
 import {cleanCode} from './net/room.js';
 import {$, applyLook, measureText, makeGrain} from './ui/dom.js';
@@ -28,6 +31,10 @@ let match = null;
 let war = null;
 /** @type {import('./conquest/engine.js').Geo} */
 let geo;
+/** @type {import('./conquest/engine.js').Geo} con Portugal */
+let geo48;
+/** @param {string} sc */
+const geoFor = sc => needsPortugal(sc) ? geo48 : geo;
 /** @type {number} */
 let driftT = 0;
 
@@ -39,8 +46,9 @@ async function boot() {
   const names = map.provinces.map((/** @type {{name:string}} */ p) => p.name);
   const plates = map.provinces.map((/** @type {{plate:string}} */ p) => p.plate);
   const view = new MapView(/** @type {HTMLCanvasElement} */ ($('#map')), map, colors);
-  W = {map, graph, colors, names, plates, view, onTap:null};
-  geo = geoOf(map);
+  const map48 = withPortugal(map);
+  W = {map, map48, graph, colors, names, plates, view, onTap:null};
+  geo = geoOf(map); geo48 = geoOf(map48);
   /** @type {Record<string, any>} */
   let flags = {};
   try { const r = await fetch('data/flags.json'); if (r.ok) flags = await r.json(); } catch (e) {}
@@ -53,7 +61,7 @@ async function boot() {
   // toques en el mapa (elegir provincia u objetivo)
   $('#map').addEventListener('click', e => W.onTap?.(e.clientX, e.clientY));
   fpsMeter();
-  /** @type {any} */ (window).__eeg = {W, get match() { return match || onlineMatch(); }, get war() { return war; }, get room() { return onlineRoom(); }, start, solo, menu, startWar, geo:() => geo, freezeFx, stepFx, onPhase:null,
+  /** @type {any} */ (window).__eeg = {W, get match() { return match || onlineMatch(); }, get war() { return war; }, get room() { return onlineRoom(); }, get S() { return S; }, start, solo, menu, startWar, geo:() => geo, freezeFx, stepFx, onPhase:null,
     look:(/** @type {any} */ o) => { Object.assign(S.settings, o); applyLook(); onLook(); }};
 
   const seed = cleanSeed(q.get('semilla') || ''), sala = cleanCode(q.get('sala') || '');
@@ -70,14 +78,16 @@ function onLook() {
   v.theme = st.theme; v.contrast = st.contrast; v.labels = st.labels && $('#menu').hidden;
   v.rebuild(); v.invalidate();
   $('#fps').hidden = !st.fps;
+  war?.syncMusic();
 }
 
 function menu() {
-  match = null; W.view.labels = false; W.onTap = null; W.view.me = -1;
+  match = null; W.view.labels = false; W.onTap = null; W.view.me = -1; W.view.setMap(W.map);
   W.view.setInsets({top:innerHeight * .08, bottom:innerHeight * .42, left:0, right:0});
   W.view.setOwners(W.map.provinces.map(p => p.i), W.map.provinces.map(() => false));
   match = null; war = null; W.view.setColors(W.colors);
-  renderMenu(W, {onNormal:seed => start(seed), onLook, onWar:warSetup, onLoad:loadWar, onOnline:() => onlineSheet(W, onlineHooks()), onRoom:room});
+  renderMenu(W, {onNormal:seed => start(seed), onLook, onWar:warSetup, onLoad:loadWar, onOnline:() => onlineSheet(W, onlineHooks()), onRoom:room,
+    onMission:startMission, onDaily:startDaily, onTutorial:startTutorial});
   drift();
 }
 /** Fondo del menú: el mapa entero, con un leve vaivén de cámara. */
@@ -113,39 +123,74 @@ function start(seed, o = {}) {
   run(game, new NormalDriver(W.graph), 'normal');
 }
 /* ---------- Conquista ---------- */
+/**
+ * @typedef {object} WarStart
+ * @property {string} sc escenario
+ * @property {number} me
+ * @property {import('./conquest/engine.js').Difficulty} diff
+ * @property {string} [seed]
+ * @property {{fog?:boolean, events?:boolean, seasons?:boolean, victory?:string, turns?:number, trait?:string, troops?:number, gold?:number}} [rules]
+ * @property {number} [center] provincia elegida (escenarios parciales)
+ * @property {{name:string, flag:import('./flagmaker.js').FlagDesign}|null} [custom] bando propio
+ * @property {{kind:string, id:string}} [tag] campaña, desafío diario o tutorial
+ */
 function warSetup() {
   leaveMenu();
-  showWarSetup(W, {onBack:menu, onStart:(sc, me, diff, rules) => startWar(sc, me, diff, '', rules)});
+  showWarSetup(W, {onBack:menu, onStart:startWar});
 }
-/**
- * @param {string} sc @param {number} me @param {import('./conquest/engine.js').Difficulty} diff @param {string} [seed]
- * @param {{fog?:boolean, events?:boolean, seasons?:boolean, victory?:string}} [r]
- */
-function startWar(sc, me, diff, seed, r = {}) {
+/** Misión de la campaña. @param {string} id */
+function startMission(id) {
+  const m = MISSIONS.find(x => x.id === id); if (!m) return menu();
+  const map = needsPortugal(m.sc) ? /** @type {any} */ (W.map48) : W.map;
+  const center = m.center ? map.provinces.findIndex((/** @type {{ine:string}} */ p) => p.ine === m.center) : -1;
+  const spec = scenario(map, m.sc, W.colors, center);
+  const me = Math.max(0, m.me ? spec.factions.findIndex(f => f.name === m.me) : 0);
+  startWar({sc:m.sc, me, diff:m.diff, seed:'CAMPANA' + m.id.toUpperCase(), center, rules:{victory:m.victory, ...(m.rules || {})}, tag:{kind:'campaign', id}});
+}
+/** El desafío de hoy: igual para todos. */
+function startDaily() {
+  const day = today(), d = daily(day, W.map);
+  if (S.daily.day !== day) S.daily = {day, best:-1, plays:0};
+  const center = W.map.provinces.findIndex(p => p.ine === d.center);
+  const spec = scenario(W.map, d.sc, W.colors, center);
+  const me = d.sc === 'vecinas' || d.sc === 'region' ? 0 : d.pick % spec.factions.length;
+  startWar({sc:d.sc, me, diff:d.diff, seed:d.seed, center, rules:{victory:'puntos', turns:d.turns, events:true, seasons:true}, tag:{kind:'daily', id:day}});
+}
+function startTutorial() {
+  const center = W.map.provinces.findIndex(p => p.ine === '42');
+  startWar({sc:'vecinas', me:0, diff:'facil', seed:'TUTORIAL', center, rules:{events:false, troops:6}, tag:{kind:'tutorial', id:'t1'}});
+}
+/** @param {WarStart} o */
+function startWar(o) {
   leaveMenu();
-  const spec = scenario(W.map, sc, W.colors), nf = spec.factions.length;
+  const spec = scenario(needsPortugal(o.sc) ? /** @type {any} */ (W.map48) : W.map, o.sc, W.colors, o.center);
+  const nf = spec.factions.length, r = o.rules || {};
+  if (o.custom) { const f = spec.factions[o.me]; spec.factions[o.me] = {...f, name:o.custom.name || f.name, banner:o.custom.flag, color:bannerColor(o.custom.flag)}; }
   const vt = /** @type {any} */ (r.victory || 'dominacion');
-  const victory = vt === 'capitales' ? {type:vt, n:Math.max(2, Math.ceil(nf / 2))} : vt === 'puntos' ? {type:vt, turns:60} : {type:vt};
-  const g = createGame(geo, spec, {seed:cleanSeed(seed || '') || newSeed(), humans:[me], rules:{difficulty:diff, fog:!!r.fog, events:r.events !== false, seasons:r.seasons !== false, victory}});
-  const id = Date.now().toString(36);
+  const victory = vt === 'capitales' ? {type:vt, n:Math.max(2, Math.ceil(nf / 2))} : vt === 'puntos' ? {type:vt, turns:r.turns || 60} : {type:vt};
+  const g = createGame(geoFor(o.sc), spec, {seed:cleanSeed(o.seed || '') || newSeed(), humans:[o.me],
+    rules:{difficulty:o.diff, fog:!!r.fog, events:r.events !== false, seasons:r.seasons !== false, victory, startTroops:r.troops || 6, incomeMul:r.gold || 100},
+    traits:r.trait ? {[o.me]:r.trait} : undefined});
+  if (o.tag) g.tag = o.tag;
   S.stats.games++;
-  runWar(id, g, me, sc, diff);
+  runWar(Date.now().toString(36), g, o.me);
 }
 /** @param {string} id */
 function loadWar(id) {
   const x = S.saves.find(s => s.id === id); if (!x) return menu();
   leaveMenu();
-  runWar(x.id, x.game, x.me, x.scenario, x.diff);
+  runWar(x.id, x.game, x.me);
 }
-/** @param {string} id @param {import('./conquest/engine.js').Game} g @param {number} me @param {string} sc @param {string} diff */
-function runWar(id, g, me, sc, diff) {
+/** @param {string} id @param {import('./conquest/engine.js').Game} g @param {number} me */
+function runWar(id, g, me) {
   const store = (/** @type {import('./conquest/engine.js').Game} */ game) => {
-    const entry = {id, at:Date.now(), scenario:sc, me, diff, name:game.F.name[me], turn:game.turn, over:game.over || !game.F.alive[me], game};
+    const entry = {id, at:Date.now(), scenario:game.scenario, me, diff:game.rules.difficulty, name:game.F.name[me], turn:game.turn, over:game.over || !game.F.alive[me], game};
     S.saves = [entry, ...S.saves.filter(s => s.id !== id)].slice(0, 5);
     save();
   };
   store(g);
-  war = new Conquest(W, geo, g, me, {onExit:menu, save:store, onNew:warSetup});
+  const tutor = g.tag?.kind === 'tutorial' && !S.tutorial ? new Tutor() : null;
+  war = new Conquest(W, geoFor(g.scenario), g, me, {onExit:menu, save:store, onNew:warSetup, onMission:startMission, onEvent:k => tutor?.on(k)});
   war.mount();
 }
 

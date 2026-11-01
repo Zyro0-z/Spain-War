@@ -1,14 +1,16 @@
 # España en Guerra
 
-Estrategia por turnos con las 47 provincias de la España peninsular. Una ruleta elige quién ataca, se tiran tres dados por bando y la provincia cambia de color hasta que solo queda uno. Web app con aspecto de iOS que se instala en el iPhone y funciona sin conexión.
+Estrategia por turnos con las 47 provincias de la España peninsular: elige un bando y conquista la península con tropas, oro, diplomacia y dados. Web app con aspecto de iOS que se instala en el iPhone y funciona sin conexión.
 
 <p align="center">
   <img src="docs/menu.jpg" width="200" alt="Menú">
-  <img src="docs/ruleta.jpg" width="200" alt="Ruleta de bandos">
-  <img src="docs/combate.jpg" width="200" alt="Combate con dados">
-  <img src="docs/tu-turno.jpg" width="200" alt="Tu turno: elegir objetivo">
-  <img src="docs/sala.jpg" width="200" alt="Sala multijugador con QR">
-  <img src="docs/victoria.jpg" width="200" alt="Victoria">
+  <img src="docs/guerra.jpg" width="200" alt="Conquista: ficha de provincia">
+  <img src="docs/peninsula.jpg" width="200" alt="Elegir bando: la península con Portugal">
+  <img src="docs/bandera.jpg" width="200" alt="Editor de bandera">
+  <img src="docs/cronica.jpg" width="200" alt="Crónica en forma de periódico">
+  <img src="docs/final.jpg" width="200" alt="Final con gráfica del poder">
+  <img src="docs/campana.jpg" width="200" alt="Campaña">
+  <img src="docs/pergamino.jpg" width="200" alt="Tema Pergamino">
 </p>
 
 ## Instalar en el iPhone
@@ -18,14 +20,16 @@ Estrategia por turnos con las 47 provincias de la España peninsular. Una ruleta
 
 ## Cómo se juega
 
-**Conquista** (un jugador): eliges escenario (las 47 provincias, las comunidades autónomas o los reinos hacia 1200), tu bando y la dificultad. En tu turno tocas una provincia para atacar, mover tropas, reclutar, construir, espiar o hablar con otro bando; al terminar el turno actúan los bots.
+**Conquista** (un jugador): eliges escenario (las 47 provincias, las comunidades autónomas, los reinos hacia 1200, la península con Portugal, tu región contra las vecinas o tu provincia contra sus vecinas), tu bando y la dificultad. En tu turno tocas una provincia para atacar, mover tropas, reclutar, construir, espiar o hablar con otro bando; al terminar el turno actúan los bots.
 
 - Combate con dados: cada lado tira 3d6 y gana quien saque más con «suma × fuerza». La fuerza sale de las tropas, el terreno, los edificios, la moral y los generales, y la probabilidad exacta se ve antes de atacar.
 - Oro por provincia según su población; con él reclutas, construyes y haces diplomacia.
 - Diplomacia: paz, pacto de no agresión, alianza, regalos, tributo y anexión pacífica. Antes de proponer ves si aceptarán y por qué. Romper un pacto es traición: todos desconfían.
 - Dificultad: **Fácil**, todos en paz y solo pelea contigo quien atacas · **Normal**, los bots se hacen la guerra y te atacan si te ven débil o si creces mucho · **Difícil**, guerra total y coalición contra el líder.
 - Profundidad: terreno (montañas y sierras defienden mejor), suministro desde tu capital, lealtad y rebeliones en lo conquistado, edificios (fortaleza, cuartel, puerto, mercado), árbol de mejoras (logística, artillería, diplomacia, espionaje), generales con habilidades que suben de nivel, espionaje, eventos y estaciones con nieve en invierno.
-- Reglas opcionales: niebla de guerra, eventos, estaciones y tipo de victoria (dominación, capitales, diplomática o puntos).
+- Personalizar (plegado): bando propio con nombre y bandera hecha en el editor (diseño, colores y símbolo), rasgo del líder, tropas al empezar, oro, niebla de guerra, eventos, estaciones y tipo de victoria (dominación, capitales, diplomática o puntos).
+- Campaña de 8 misiones encadenadas con hasta 3 estrellas según los turnos, desafío del día (la misma partida para todos, 30 turnos a puntos) y tutorial interactivo.
+- Crónica en forma de periódico al empezar cada año, final con repetición del mapa turno a turno y gráfica del poder, 20 logros con medallas y música sintetizada que se vuelve tensa en guerra.
 - Las partidas se guardan solas (hasta 5) y puedes deshacer movimientos, reclutas y edificios hasta tu último ataque.
 
 Reglas completas y números en [docs/DISENO.md](docs/DISENO.md).
@@ -36,7 +40,7 @@ Reglas completas y números en [docs/DISENO.md](docs/DISENO.md).
 
 ## Accesibilidad y ajustes
 
-Temas Marina y Atlas, contraste alto, menos animaciones (cortes directos, sin partículas ni temblores), tamaño de texto según el iPhone o a mano, anuncios de cada ronda para VoiceOver, sonido sintetizado con interruptor y medidor de fotogramas.
+Temas Marina, Atlas, Pergamino, Táctico (nocturno) y Minimal, contraste alto, menos animaciones (cortes directos, sin partículas ni temblores), tamaño de texto según el iPhone o a mano, anuncios de cada ronda para VoiceOver, sonido sintetizado con interruptor y medidor de fotogramas.
 
 ## Desarrollo
 

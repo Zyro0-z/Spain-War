@@ -12,7 +12,7 @@ const CASTLE = 'M-7 3V-5h2.4v2h1.8v-2h2.8v2h1.8v-2H7V3Z M-2 3V0a2 2 0 0 1 4 0v3Z
 export class Overlay {
   /** @param {SVGSVGElement} svg @param {import('../map/render.js').MapView} view */
   constructor(svg, view) {
-    this.svg = svg; this.view = view; this.map = view.map;
+    this.svg = svg; this.view = view;
     svg.innerHTML = '';
     svg.appendChild(el('defs')).innerHTML = `
       <linearGradient id="tkShine" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".35"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".25"/></linearGradient>
@@ -30,6 +30,8 @@ export class Overlay {
     this.visible = true;
     this.raf = 0;
   }
+  /** Geometría actual del mapa (cambia con el escenario de la península). */
+  get map() { return this.view.map; }
   /** Fichas para las provincias que juegan. @param {number[]} active */
   build(active) {
     this.gTok.innerHTML = ''; this.tokens.clear();

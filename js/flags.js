@@ -12,7 +12,7 @@ let W = null;
 /** @param {typeof manifest} m @param {FlagWorld} world */
 export function initFlags(m, world) { manifest = m && typeof m === 'object' ? m : {}; W = world; }
 /** @param {number} f */
-export const hasFlag = f => !!(W && manifest[W.map.provinces[f].ine]);
+export const hasFlag = f => !!(W && W.map.provinces[f] && manifest[W.map.provinces[f].ine]);
 export const flagCount = () => Object.keys(manifest).length;
 /** Rutas de las banderas descargadas (para el modo sin conexión). */
 export const flagFiles = () => Object.keys(manifest).map(ine => `data/flags/${ine}.png`);
@@ -24,6 +24,7 @@ export const flagFiles = () => Object.keys(manifest).map(ine => `data/flags/${in
 export function flag(f, o = {}) {
   if (!W) return '';
   const p = W.map.provinces[f], c = W.colors[f];
+  if (!p) return '<span class="flag empty" aria-hidden="true"></span>';
   const inner = manifest[p.ine]
     ? `<img src="data/flags/${p.ine}.png" alt="" decoding="async" draggable="false">`
     : `<svg viewBox="0 0 30 20" preserveAspectRatio="none" aria-hidden="true"><rect width="30" height="20" fill="${c}"/><rect y="14" width="30" height="6" fill="${darken(c, .28)}"/><text x="15" y="11.6" text-anchor="middle" font-family="'Barlow Condensed','Arial Narrow',sans-serif" font-weight="800" font-size="9.5" fill="${inkOn(c)}">${p.plate}</text></svg>`;

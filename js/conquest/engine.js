@@ -88,7 +88,7 @@ export const DIFFICULTY = {
  * @property {Rules} rules
  * @property {number[]} humans bandos humanos
  * @property {{owner:number[], troops:number[], ready:number[], bld:string[], loyal:number[], origin:number[], active:boolean[]}} P
- * @property {{name:string[], flag:number[], color:string[], capital:number[], home:number[], gold:number[], morale:number[], alive:boolean[], tech:number[][], trait:string[]}} F
+ * @property {{name:string[], flag:number[], color:string[], capital:number[], home:number[], gold:number[], morale:number[], alive:boolean[], tech:number[][], trait:string[], banner?:any[]}} F banner: bandera dibujada (Portugal o bando propio)
  * @property {number[][]} rel relación −100..100 (simétrica)
  * @property {number[][]} st estado diplomático
  * @property {number[][]} until fin del pacto
@@ -99,6 +99,8 @@ export const DIFFICULTY = {
  * @property {{from:number, to:number, kind:string, turn:number}[]} offers propuestas de los bots a humanos
  * @property {{conq:number[], won:number[], lost:number[], caps:number[], peak:number[], betrayals:number[]}} stats
  * @property {string[]} hist dueños por turno
+ * @property {{kind:string, id:string}} [tag] campaña, desafío diario o tutorial
+ * @property {{n:number, t:string, a:number, b?:number, p?:number, k?:string}[]} [chron] crónica: sucesos destacados
  * @property {any[]} log sucesos del turno en curso
  */
 /** @typedef {{n:number, adj:number[][], ine:string[], tier:number[], terrain:('m'|'s'|'l')[], coast:boolean[]}} Geo */
@@ -114,7 +116,8 @@ export function geoOf(map) {
 /**
  * @typedef {object} ScenarioSpec
  * @property {string} id
- * @property {{name:string, flag:number, color:string, provinces:number[], capital:number}[]} factions
+ * @property {number} [center] provincia elegida (escenarios parciales)
+ * @property {{name:string, flag:number, color:string, provinces:number[], capital:number, banner?:any}[]} factions
  */
 /**
  * @param {Geo} geo @param {ScenarioSpec} sc @param {{seed:string, humans:number[], rules?:Partial<Rules>, traits?:Record<number, string>}} o
@@ -138,7 +141,7 @@ export function createGame(geo, sc, o) {
     P:{owner, troops, ready:[...troops], bld:new Array(geo.n).fill(''), loyal:owner.map(f => f < 0 ? 0 : 100), origin:[...owner], active},
     F:{name:[...sc.factions.map(f => f.name), 'Rebeldes'], flag:[...sc.factions.map(f => f.flag), -1], color:[...sc.factions.map(f => f.color), '#6B6F7A'],
       capital, home:[...capital], gold:new Array(nf + 1).fill(20), morale:new Array(nf + 1).fill(100), alive:[...sc.factions.map(() => true), false],
-      tech:Array.from({length:nf + 1}, () => [0, 0, 0, 0]), trait},
+      tech:Array.from({length:nf + 1}, () => [0, 0, 0, 0]), trait, banner:[...sc.factions.map(f => f.banner || null), null]},
     rel:sq(0), st:sq(PEACE), until:sq(0),
     gens:[], genSeq:0, intel:[], fx:[], offers:[],
     stats:{conq:new Array(nf + 1).fill(0), won:new Array(nf + 1).fill(0), lost:new Array(nf + 1).fill(0), caps:new Array(nf + 1).fill(0), peak:counts(owner, nf + 1), betrayals:new Array(nf + 1).fill(0)},
@@ -192,8 +195,22 @@ export const generalAt = (g, p) => g.gens.find(x => x.p === p);
 export function strength(g, f) { let s = 0; for (let p = 0; p < g.P.owner.length; p++) if (g.P.owner[p] === f) s += g.P.troops[p] + 5; return s; }
 /** @param {Game} g @param {number} a @param {number} b */
 export const atWar = (g, a, b) => a !== b && g.st[a][b] === WAR;
+/** Sucesos que pasan a la crónica (el periódico de la partida). */
+const NEWS = new Set(['war', 'betray', 'elim', 'accept', 'revolt', 'victory']);
 /** @param {Game} g @param {any} e */
-const emit = (g, e) => { g.log.push({turn:g.turn, ...e}); };
+const emit = (g, e) => {
+  g.log.push({turn:g.turn, ...e});
+  const cap = e.t === 'attack' && e.capital;
+  if (!NEWS.has(e.t) && !cap) return;
+  if (!g.chron) g.chron = [];
+  const n = cap ? {n:g.turn, t:'cap', a:e.f, b:e.d, p:e.to}
+    : e.t === 'elim' ? {n:g.turn, t:'elim', a:e.f, b:e.by}
+    : e.t === 'revolt' ? {n:g.turn, t:'revolt', a:e.from, p:e.p}
+    : e.t === 'victory' ? {n:g.turn, t:'victory', a:e.f, k:e.how}
+    : {n:g.turn, t:e.t, a:e.a, b:e.b, k:e.kind || e.why || ''};
+  g.chron.push(n);
+  if (g.chron.length > 160) g.chron.splice(0, g.chron.length - 160);
+};
 /** @param {number} v @param {number} a @param {number} b */
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 

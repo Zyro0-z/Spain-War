@@ -15,6 +15,13 @@ import {Clock} from './clock.js';
 import {Overlay} from './overlay.js';
 import {enableGestures} from './gestures.js';
 import {borderKey} from '../map/render.js';
+import {needsPortugal} from '../conquest/scenarios.js';
+import {bannerFlag} from '../flagmaker.js';
+import {music} from '../music.js';
+import {newspaper} from './chronicle.js';
+import {medalsFor} from '../conquest/medals.js';
+import {award} from './medals.js';
+import {MISSIONS, starsFor} from '../conquest/campaign.js';
 
 /** @typedef {import('../conquest/engine.js').Game} Game */
 /** @typedef {import('../conquest/engine.js').Geo} Geo */
@@ -23,6 +30,8 @@ import {borderKey} from '../map/render.js';
  * @property {() => void} onExit
  * @property {(g:Game) => void} save
  * @property {() => void} [onNew]
+ * @property {(id:string) => void} [onMission] empezar otra misión de la campaña
+ * @property {(kind:string) => void} [onEvent] avisos para el tutorial
  */
 
 const sleep = (/** @type {number} */ ms) => new Promise(r => setTimeout(r, reduced() ? Math.min(ms, 60) : ms));
@@ -35,6 +44,8 @@ export class Conquest {
   constructor(W, geo, g, me, hooks) {
     this.W = W; this.geo = geo; this.g = g; this.me = me; this.hooks = hooks;
     this.view = W.view;
+    /** Geometría del escenario (con Portugal en la península). */
+    this.map = needsPortugal(g.scenario) && W.map48 ? W.map48 : W.map;
     this.clock = new Clock();
     this.sel = -1;
     /** @type {'idle'|'move'|'attack'} */ this.mode = 'idle';
@@ -51,15 +62,20 @@ export class Conquest {
   /** @param {number} f */
   fname(f) { return f >= 0 ? this.g.F.name[f] : 'Sin dueño'; }
   /** @param {number} p */
-  pname(p) { return this.W.map.provinces[p].name; }
+  pname(p) { return this.map.provinces[p].name; }
   /** Bandera del bando (la de su provincia de origen). @param {number} f @param {string} [cls] */
-  flagOf(f, cls = '') { return f >= 0 && this.g.F.flag[f] >= 0 ? flag(this.g.F.flag[f], {cls}) : '<span class="flag empty"></span>'; }
+  flagOf(f, cls = '') {
+    const b = f >= 0 ? this.g.F.banner?.[f] : null;
+    if (b) return bannerFlag(b, {cls});
+    return f >= 0 && this.g.F.flag[f] >= 0 ? flag(this.g.F.flag[f], {cls}) : '<span class="flag empty"></span>';
+  }
 
   /* ======================= Montaje ======================= */
   mount() {
     const v = this.view, g = this.g;
     $('#war').hidden = false;
     $('#ov').style.display = '';
+    v.setMap(this.map);
     v.labelDy = -15; v.me = this.me; v.labels = S.settings.labels;
     v.focus([], [], 0); v.hop = -1; v.cands = new Set(); v.hot = [];
     v.setColors(g.F.color);
@@ -70,12 +86,24 @@ export class Conquest {
     this.renderHud();
     this.renderBar();
     this.layout();
-    const mine = E.provincesOf(g, this.me);
-    v.moveTo(mine.length && mine.length < 12 ? v.frameOf(mine, 2.2) : v.overview(), reduced() ? 0 : 700);
+    const mine = E.provincesOf(g, this.me), act = g.P.active.flatMap((a, p) => a ? [p] : []);
+    const cam = act.length < g.P.active.length ? v.frameOf(act, 2.6) : mine.length && mine.length < 12 ? v.frameOf(mine, 2.2) : v.overview();
+    v.moveTo(cam, reduced() ? 0 : 700);
     this.refresh();
+    music.start(); this.mood();
     this.afterTurnStart();
   }
+  /** Música según las guerras abiertas. */
+  mood() {
+    const g = this.g, me = this.me, R = E.rebels(g);
+    let wars = 0; for (let f = 0; f < R; f++) if (f !== me && g.F.alive[f] && g.st[me][f] === E.WAR) wars++;
+    music.mood(wars ? Math.min(1, .55 + wars * .12) : this.battles.length ? .3 : 0);
+  }
+  /** Tras cambiar los ajustes de sonido. */
+  syncMusic() { music.sync(); if (!this.g.over) { music.start(); this.mood(); } }
   unmount() {
+    music.stop();
+    $('#war').querySelector('.coach')?.remove(); delete $('#war').dataset.coach;
     this.offGestures();
     this.overlay.clearArrows(); this.overlay.highlight({}); this.overlay.fronts([]); this.overlay.smoke([]);
     $('#tint').style.opacity = '0'; this.view.winter = false;
@@ -83,6 +111,7 @@ export class Conquest {
     $('#war').hidden = true; $('#wHud').innerHTML = ''; $('#wBar').innerHTML = '';
     const v = this.view;
     v.onCam = null; v.labelDy = 0; v.me = -1; v.focus([], [], 0);
+    v.setMap(this.W.map);
   }
   layout() {
     const hud = $('#wHud').getBoundingClientRect(), bar = $('#wBar').getBoundingClientRect();
@@ -111,7 +140,7 @@ export class Conquest {
     this.overlay.update({owner:g.P.owner, troops:g.P.troops.map((t, p) => vis.has(p) ? t : null), colors:g.F.color, capitals:caps, mine:this.me, marks});
     // frentes de guerra contigo
     const fronts = [];
-    for (const [key, d] of Object.entries(this.W.map.borders)) {
+    for (const [key, d] of Object.entries(this.map.borders)) {
       const [a, b] = key.split('-').map(Number), oa = g.P.owner[a], ob = g.P.owner[b];
       if (oa < 0 || ob < 0 || oa === ob) continue;
       const other = oa === this.me ? ob : ob === this.me ? oa : -1;
@@ -180,6 +209,7 @@ export class Conquest {
   /** @param {number} p */
   select(p) {
     this.sel = p; this.mode = 'idle'; this.src = -1;
+    if (this.g.P.owner[p] === this.me) this.hooks.onEvent?.('select-own');
     this.overlay.highlight({sel:p});
     this.card(p);
   }
@@ -301,6 +331,8 @@ export class Conquest {
       const r = E.apply(this.geo, this.g, a);
       if (reversible) this.undo.push(before); else this.undo = [];
       this.g = r.g; this.save();
+      award(medalsFor(this.g, this.me));
+      this.hooks.onEvent?.(a.type);
       return r.ev;
     } catch (e) { toast(/** @type {Error} */ (e).message); return null; }
   }
@@ -473,6 +505,7 @@ export class Conquest {
 
   /* ======================= Diplomacia ======================= */
   diplomacySheet() {
+    this.hooks.onEvent?.('diplomacy');
     const g = this.g, me = this.me, R = E.rebels(g);
     const near = new Set();
     for (let p = 0; p < this.geo.n; p++) if (g.P.owner[p] === me) for (const q of this.geo.adj[p]) { const o = g.P.owner[q]; if (o >= 0 && o !== me && o < R) near.add(o); }
@@ -544,6 +577,7 @@ export class Conquest {
 
   /* ======================= Paneles ======================= */
   economySheet() {
+    this.hooks.onEvent?.('economy');
     const g = this.g, me = this.me, geo = this.geo, sup = E.supplied(geo, g, me);
     const rows = E.provincesOf(g, me).map(p => ({p, v:E.provinceIncome(geo, g, p, sup), gr:E.growth(geo, g, p, sup)})).sort((a, b) => b.v - a.v);
     const tech = E.TECHS.map((k, i) => {
@@ -564,12 +598,14 @@ export class Conquest {
   menuSheet() {
     openSheet({title:'Partida', body:`
       <div class="grp">
+        <button class="rowi" id="mmNews">${icon('map')}<div class="l">Crónica<small>Lo que ha pasado en el último año</small></div></button>
         <button class="rowi" id="mmRules">${icon('info')}<div class="l">Cómo se juega</div></button>
         <button class="rowi" id="mmExit">${icon('back')}<div class="l">Salir al menú<small>La partida queda guardada</small></div></button>
       </div>`,
       mount:el => {
         /** @type {HTMLElement} */ (el.querySelector('#mmExit')).onclick = () => { closeSheet(); this.save(); this.unmount(); this.hooks.onExit(); };
         /** @type {HTMLElement} */ (el.querySelector('#mmRules')).onclick = () => { closeSheet(); setTimeout(() => this.rulesSheet(), 300); };
+        /** @type {HTMLElement} */ (el.querySelector('#mmNews')).onclick = () => { closeSheet(); setTimeout(() => this.news(Math.max(1, this.g.turn - 12), this.g.turn), 300); };
       }});
   }
   rulesSheet() {
@@ -578,7 +614,7 @@ export class Conquest {
       <p><b>Combate.</b> Cada lado tira 3 dados; gana quien saque más con «suma × fuerza». La fuerza depende de las tropas, el terreno, los edificios, la moral y los generales. Antes de atacar ves la probabilidad exacta.</p>
       <p><b>Oro.</b> Cada provincia da oro según su población. Úsalo para reclutar, construir y en diplomacia.</p>
       <p><b>Dificultad.</b> En Fácil nadie te ataca si no le atacas. En Normal los bots se pelean y te atacan si te ven débil. En Difícil es la guerra total.</p>
-      <p><b>Ganas</b> cuando dominas todas las provincias.</p></div>`});
+      <p><b>Ganas</b> ${victoryText(this.g)}.</p></div>`});
   }
 
   /* ======================= Fin de turno ======================= */
@@ -603,10 +639,22 @@ export class Conquest {
       if (e.t === 'revolt' && (e.from === this.me || e.to === this.me)) toast(`${this.pname(e.p)} se rebela`);
       if (e.t === 'season') toast(`Llega ${E.SEASONS[e.s].toLowerCase()}`);
     }
+    award(medalsFor(g, this.me));
+    this.mood();
+    this.hooks.onEvent?.('endturn');
     if (g.over || !g.F.alive[this.me]) return this.end();
     this.banner(`Turno ${g.turn} · ${E.SEASONS[E.season(g)]}`);
     this.renderBar();
+    if (g.turn > 1 && (g.turn - 1) % 12 === 0 && (g.chron || []).some(n => n.n >= g.turn - 12)) {
+      await sleep(900);
+      await new Promise(res => this.news(g.turn - 12, g.turn - 1, `Crónica del año ${E.year(g) - 1}`, () => res(null)));
+    }
     this.afterTurnStart();
+  }
+  /** @param {number} from @param {number} to @param {string} [title] @param {() => void} [onClose] */
+  news(from, to, title, onClose) {
+    sound('tap');
+    newspaper(this.g, this.me, p => this.pname(p), from, to, {title, onClose});
   }
   /** Muestra lo que han hecho los bots. @param {Game} before @param {any[]} ev */
   async animateBots(before, ev) {
@@ -649,33 +697,140 @@ export class Conquest {
 
   /* ======================= Final ======================= */
   end() {
-    const g = this.g, me = this.me, won = g.winner === me, lost = !g.F.alive[me];
+    music.stop();
+    const g = this.g, me = this.me, won = g.winner === me, lost = !g.F.alive[me], tag = g.tag;
+    award(medalsFor(g, me));
     const v = $('#victory');
     const f = won ? me : g.winner;
+    // campaña: estrellas; desafío diario: puntuación
+    let extra = '', kick = won ? 'Victoria' : lost ? 'Derrota' : 'Fin de la partida';
+    const mission = tag?.kind === 'campaign' ? MISSIONS.findIndex(m => m.id === tag.id) : -1;
+    let nextMission = '';
+    if (mission >= 0) {
+      const m = MISSIONS[mission];
+      kick = `Misión ${mission + 1} · ${m.name}`;
+      if (won) {
+        const st = starsFor(m, g.turn);
+        if (st > (S.campaign[m.id] || 0)) { S.campaign[m.id] = st; save(); }
+        extra = `<div class="stars" aria-label="${st} de 3 estrellas">${[0, 1, 2].map(i => starSvg(i < st)).join('')}</div><p class="v-sub small">3 estrellas en ${m.stars[0]} turnos o menos · 2 en ${m.stars[1]}</p>`;
+        if (MISSIONS.every(x => S.campaign[x.id])) award(['campana']);
+        if (MISSIONS[mission + 1]) nextMission = MISSIONS[mission + 1].id;
+      }
+    }
+    let shareText = '';
+    if (tag?.kind === 'daily') {
+      const pts = g.F.alive[me] ? E.score(g, me) : 0;
+      kick = 'Desafío del día';
+      if (tag.id === S.daily.day) { S.daily.best = Math.max(S.daily.best, pts); S.daily.plays++; save(); }
+      award(['diario']);
+      extra = `<div class="pts"><b class="num">${pts}</b><span>puntos${S.daily.day === tag.id ? ` · tu mejor marca hoy: ${S.daily.best}` : ''}</span></div>`;
+      shareText = `España en Guerra · Desafío del ${tag.id.split('-').reverse().join('/')}: ${pts} puntos con ${g.F.name[me]}`;
+    }
+    if (tag?.kind === 'tutorial') { S.tutorial = true; save(); }
     v.hidden = false; v.className = 'overlay' + (lost ? ' lost' : '');
     v.innerHTML = `<div class="v-in">
       <div class="rays" style="--c:${g.F.color[f >= 0 ? f : me]}"><div class="pole">${this.flagOf(f >= 0 ? f : me, 'big' + (lost ? ' dead' : ' wave'))}</div></div>
-      <div class="v-kick">${won ? 'Victoria' : lost ? 'Derrota' : 'Fin de la partida'}</div>
-      <h2 class="v-title" id="vTitle">${won ? '¡España es tuya!' : lost ? 'Has caído' : esc(g.F.name[f])}</h2>
-      <p class="v-sub">${won ? `${esc(g.F.name[me])} domina la península en ${g.turn} turnos` : lost ? `Resistes hasta el turno ${g.turn}` : 'gana la partida'}</p>
+      <div class="v-kick">${esc(kick)}</div>
+      <h2 class="v-title" id="vTitle">${won ? winTitle(g) : lost ? 'Has caído' : esc(g.F.name[f])}</h2>
+      <p class="v-sub">${won ? `${esc(g.F.name[me])} se impone en ${g.turn} turnos` : lost ? `Resistes hasta el turno ${g.turn}` : 'gana la partida'}</p>
+      ${extra}
       <div class="v-stats glass">
         <div><b class="num">${g.turn}</b><span>Turnos</span></div>
         <div><b class="num">${g.stats.conq[me]}</b><span>Conquistas</span></div>
         <div><b class="num">${g.stats.won[me]}</b><span>Batallas ganadas</span></div>
         <div><b class="num">${g.stats.peak[me]}</b><span>Máx. provincias</span></div>
       </div>
+      ${this.powerChart()}
       <div class="v-btns">
-        ${this.hooks.onNew ? `<button class="btn" id="vNew">${icon('swords')}Otra partida</button>` : ''}
-        <button class="btn sm ghost" id="vMenu">${icon('back')}Menú</button>
+        ${nextMission ? `<button class="btn" id="vNext">${icon('play')}Siguiente misión</button>` : this.hooks.onNew && !tag ? `<button class="btn" id="vNew">${icon('swords')}Otra partida</button>` : ''}
+        <div class="row3">
+          <button class="btn sm ghost" id="vReplay">${icon('replay')}Repetición</button>
+          <button class="btn sm ghost" id="vNews">${icon('map')}Crónica</button>
+          ${shareText ? `<button class="btn sm ghost" id="vShare">${icon('users')}Compartir</button>` : ''}
+          <button class="btn sm ghost" id="vMenu">${icon('back')}Menú</button>
+        </div>
       </div></div>`;
     if (won) { sound('victory'); celebrate([g.F.color[me], '#F2C94C', '#FFFFFF']); } else sound('eliminate');
-    announce(won ? 'Victoria. Has conquistado España.' : lost ? 'Derrota.' : 'Fin de la partida.');
+    announce(won ? 'Victoria.' : lost ? 'Derrota.' : 'Fin de la partida.');
     const close = () => { v.hidden = true; v.innerHTML = ''; v.className = 'overlay'; this.unmount(); };
-    const nw = document.getElementById('vNew'); if (nw) nw.onclick = () => { close(); this.hooks.onNew?.(); };
-    /** @type {HTMLElement} */ (document.getElementById('vMenu')).onclick = () => { close(); this.hooks.onExit(); };
+    const on = (/** @type {string} */ id, /** @type {() => void} */ fn) => { const b = document.getElementById(id); if (b) b.onclick = () => { sound('tap'); fn(); }; };
+    on('vNew', () => { close(); this.hooks.onNew?.(); });
+    on('vNext', () => { close(); this.hooks.onMission?.(nextMission); });
+    on('vMenu', () => { close(); this.hooks.onExit(); });
+    on('vNews', () => this.news(Math.max(1, g.turn - 12), g.turn, 'Edición especial'));
+    on('vReplay', () => this.replay());
+    on('vShare', async () => {
+      try { if (navigator.share) await navigator.share({text:shareText}); else { await navigator.clipboard.writeText(shareText); toast('Copiado'); } } catch (e) {}
+    });
+  }
+  /** Provincias de cada bando en cada turno, a partir del historial. */
+  series() {
+    const g = this.g, nf = E.rebels(g) + 1;
+    return g.hist.map(h => { const c = new Array(nf).fill(0); for (const ch of h) if (ch !== '.') c[ch.charCodeAt(0) - 48]++; return c; });
+  }
+  /** Gráfica del poder: tú y los cuatro bandos que más crecieron. */
+  powerChart() {
+    const g = this.g, me = this.me, S2 = this.series();
+    if (S2.length < 3) return '';
+    const nf = E.rebels(g), peak = Array.from({length:nf}, (_, f) => Math.max(...S2.map(c => c[f])));
+    const pick = [me, ...peak.map((v, f) => ({v, f})).filter(x => x.f !== me).sort((a, b) => b.v - a.v).slice(0, 4).map(x => x.f)];
+    const W = 300, H = 92, top = Math.max(2, ...pick.map(f => peak[f])), n = S2.length;
+    const line = (/** @type {number} */ f) => S2.map((c, i) => `${(i * W / (n - 1)).toFixed(1)},${(H - c[f] * H / top).toFixed(1)}`).join(' ');
+    const lines = pick.slice().reverse().map(f => `<polyline points="${line(f)}" fill="none" stroke="${g.F.color[f]}" stroke-width="${f === me ? 3 : 1.6}" stroke-linejoin="round" stroke-linecap="round"${f === me ? ' class="me"' : ' opacity=".85"'}/>`).join('');
+    return `<figure class="pchart glass"><figcaption>El poder, turno a turno</figcaption>
+      <svg viewBox="-2 -4 ${W + 4} ${H + 8}" preserveAspectRatio="none" role="img" aria-label="Provincias de cada bando por turno">
+        ${[.25, .5, .75].map(k => `<line x1="0" x2="${W}" y1="${H * k}" y2="${H * k}" class="gl"/>`).join('')}${lines}</svg>
+      <div class="lg">${pick.map(f => `<span><i style="background:${g.F.color[f]}"></i>${esc(f === me ? 'Tú' : g.F.name[f])}</span>`).join('')}</div></figure>`;
+  }
+  /** Cámara rápida: el mapa de toda la partida, turno a turno. Un toque la salta. */
+  async replay() {
+    const g = this.g, v = $('#victory'), view = this.view, hud = $('#wHud'), bar = $('#wBar'), b = $('#wBanner');
+    v.hidden = true; hud.style.visibility = bar.style.visibility = 'hidden';
+    this.overlay.show(false); view.me = -1;
+    const act = g.P.active.flatMap((a, p) => a ? [p] : []);
+    await view.moveTo(act.length < g.P.active.length ? view.frameOf(act, 2.6) : view.overview(), reduced() ? 0 : 500);
+    let skip = false;
+    const tap = () => { skip = true; };
+    addEventListener('pointerdown', tap, true);
+    const step = Math.max(45, Math.min(220, 11000 / g.hist.length));
+    b.className = 'banner glass disp show';
+    for (let i = 0; i < g.hist.length && !skip; i++) {
+      view.setOwners([...g.hist[i]].map(ch => ch === '.' ? -1 : ch.charCodeAt(0) - 48), g.F.alive.map(() => false));
+      b.textContent = `Turno ${i + 1} · año ${1 + Math.floor(i / 12)}`;
+      await sleep(step);
+    }
+    removeEventListener('pointerdown', tap, true);
+    await sleep(skip ? 0 : 700);
+    b.className = 'banner glass disp';
+    view.setOwners(g.P.owner, g.F.alive.map(a => !a)); view.me = this.me;
+    this.overlay.show(true); hud.style.visibility = bar.style.visibility = '';
+    v.hidden = false;
   }
 }
+/** Estrella de la campaña. @param {boolean} on */
+export function starSvg(on) {
+  return `<svg class="star${on ? ' on' : ''}" viewBox="-12 -12 24 24" aria-hidden="true"><path d="M0-10.5 3.1-3.6 10.5-3.2 4.8 1.6 6.6 9 0 5 -6.6 9-4.8 1.6-10.5-3.2-3.1-3.6Z"/></svg>`;
+}
 
+/** Titular de la victoria según cómo se gana. @param {Game} g */
+function winTitle(g) {
+  const t = g.rules.victory.type;
+  if (t === 'capitales') return '¡Las capitales son tuyas!';
+  if (t === 'diplomatica') return '¡Paz bajo tu bandera!';
+  if (t === 'puntos' || t === 'supervivencia') return '¡Primer puesto!';
+  if (g.scenario === 'peninsula') return '¡La península es tuya!';
+  if (g.scenario === 'region') return '¡Región conquistada!';
+  if (g.scenario === 'vecinas') return '¡Comarca conquistada!';
+  return '¡España es tuya!';
+}
+/** Objetivo de la partida. @param {Game} g */
+function victoryText(g) {
+  const v = g.rules.victory;
+  if (v.type === 'capitales') return `cuando tienes ${v.n || 5} de las capitales originales`;
+  if (v.type === 'diplomatica') return 'con el 30 % de las provincias y pacto o alianza con todos los bandos que sigan en pie';
+  if (v.type === 'puntos') return `con más puntos al acabar el turno ${v.turns || 60} (10 por provincia, 25 por capital, más tropas y oro)`;
+  return g.P.active.every(Boolean) ? 'cuando dominas todas las provincias' : 'cuando dominas todas las provincias en juego';
+}
 /** Texto de un suceso para el jugador. @param {any} e @param {Conquest} c */
 function eventText(e, c) {
   const p = e.p != null ? c.pname(e.p) : '';

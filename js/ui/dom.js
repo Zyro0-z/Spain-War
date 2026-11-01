@@ -32,11 +32,12 @@ export function measureText() {
 export function applyLook() {
   const r = document.documentElement, st = S.settings;
   r.setAttribute('data-theme', st.theme);
+  r.toggleAttribute('data-light', ['atlas', 'pergamino', 'minimal'].includes(st.theme));
   r.toggleAttribute('data-contrast', !!st.contrast);
   r.toggleAttribute('data-reduced', st.motion === 'reduced');
   r.style.setProperty('--tz', String(st.textSize === 'auto' ? baseText : +st.textSize || 1));
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', st.theme === 'atlas' ? '#E6D8B8' : '#071226');
+  if (meta) meta.setAttribute('content', ({atlas:'#E6D8B8', pergamino:'#D8C49A', tactico:'#020806', minimal:'#EEF1F5'})[/** @type {'atlas'} */ (st.theme)] || '#071226');
 }
 /** Grano del fondo: una tesela de ruido generada una vez. */
 export function makeGrain() {

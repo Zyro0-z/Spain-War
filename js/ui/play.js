@@ -18,7 +18,8 @@ import {TURN_MS} from '../net/room.js';
 
 /**
  * @typedef {object} World
- * @property {import('../map/render.js').MapData} map
+ * @property {import('../map/render.js').MapData} map las 47 provincias
+ * @property {import('../map/render.js').MapData} [map48] con Portugal (escenario de la península)
  * @property {import('../engine/game.js').Graph} graph
  * @property {string[]} colors
  * @property {string[]} names

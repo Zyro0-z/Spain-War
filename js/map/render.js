@@ -5,7 +5,7 @@
 import {lighten, darken, alpha, desaturate, mix} from '../art.js';
 
 /** @typedef {{i:number, ine:string, name:string, plate:string, d:string, c:number[], label:number[], room:number, bbox:number[], area:number, adj:number[]}} Province */
-/** @typedef {{w:number, h:number, provinces:Province[], borders:Record<string,string>, outer:string[], land:string, neutral:string}} MapData */
+/** @typedef {{w:number, h:number, provinces:Province[], borders:Record<string,string>, outer:string[], land:string, neutral:string, pt?:any, full?:boolean}} MapData */
 /** @typedef {{x:number, y:number, s:number}} Cam */
 
 const ease = (/** @type {number} */ t) => t < .5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
@@ -13,6 +13,22 @@ const easeOut = (/** @type {number} */ t) => 1 - (1 - t) ** 3;
 const clamp = (/** @type {number} */ v, /** @type {number} */ a, /** @type {number} */ b) => Math.max(a, Math.min(b, v));
 /** Margen (unidades del mapa) que la imagen en memoria pinta alrededor: tierra vecina sin cortes al moverse. */
 const M = 200;
+/**
+ * Temas del mapa: colores del entorno y cuánto pesan los efectos (relieve, líneas de agua, brillo, textura).
+ * tint acerca los colores de los bandos a un tono (pergamino, noche); flat quita volumen (minimalista).
+ */
+const THEMES = {
+  marina:{neutral:'#15233D', neutralEdge:'rgba(140,175,230,.22)', grid:'rgba(120,170,255,.07)', shadow:'rgba(0,0,0,.65)', coast:'rgba(110,190,255,.28)', ink:'#FFFFFF', halo:'rgba(4,10,24,.8)', dim:'rgba(3,8,20,.66)', line:'rgba(6,10,22,.85)',
+    empty:'#3A4560', coastLine:'rgba(230,240,255,.55)', water:.13, relief:.62, glow:1, noise:.1, tint:/** @type {[string, number]|null} */ (null), flat:false},
+  atlas:{neutral:'#D9C9A6', neutralEdge:'rgba(90,64,30,.45)', grid:'rgba(90,64,30,.12)', shadow:'rgba(70,45,15,.45)', coast:'rgba(70,110,140,.35)', ink:'#2B1E10', halo:'rgba(250,240,220,.85)', dim:'rgba(236,224,196,.62)', line:'rgba(40,25,10,.7)',
+    empty:'#CDBF9F', coastLine:'rgba(60,40,15,.75)', water:.3, relief:.5, glow:1, noise:.1, tint:null, flat:false},
+  pergamino:{neutral:'#C9B184', neutralEdge:'rgba(80,48,18,.5)', grid:'rgba(80,48,18,.1)', shadow:'rgba(60,35,10,.5)', coast:'rgba(90,55,25,.32)', ink:'#2A1808', halo:'rgba(242,228,195,.88)', dim:'rgba(215,195,150,.62)', line:'rgba(52,28,8,.85)',
+    empty:'#BFA77C', coastLine:'rgba(58,32,10,.9)', water:.42, relief:.55, glow:.35, noise:.2, tint:['#E2CB98', .42], flat:false},
+  tactico:{neutral:'#06130D', neutralEdge:'rgba(90,255,170,.28)', grid:'rgba(90,255,170,.08)', shadow:'rgba(0,0,0,.85)', coast:'rgba(90,255,170,.22)', ink:'#D6FFE9', halo:'rgba(0,10,5,.88)', dim:'rgba(0,6,3,.72)', line:'rgba(150,255,205,.6)',
+    empty:'#0C1F17', coastLine:'rgba(120,255,190,.75)', water:.18, relief:.35, glow:1.5, noise:.05, tint:['#03140D', .52], flat:false},
+  minimal:{neutral:'#FFFFFF', neutralEdge:'rgba(30,40,60,.14)', grid:'rgba(0,0,0,0)', shadow:'rgba(30,40,60,.16)', coast:'rgba(0,0,0,0)', ink:'#1A2230', halo:'rgba(255,255,255,.92)', dim:'rgba(238,241,245,.72)', line:'rgba(255,255,255,.95)',
+    empty:'#DCE1E9', coastLine:'rgba(30,40,60,.3)', water:0, relief:0, glow:0, noise:0, tint:['#FFFFFF', .2], flat:true},
+};
 
 /** Puntos de un path de d3 (M x,y L x,y … Z). @param {string} d */
 export function pathPoints(d) {
@@ -37,19 +53,16 @@ export class MapView {
   constructor(canvas, map, colors) {
     this.canvas = canvas;
     this.ctx = /** @type {CanvasRenderingContext2D} */ (canvas.getContext('2d'));
-    this.map = map;
     this.colors = colors;
-    this.paths = map.provinces.map(p => new Path2D(p.d));
-    /** @type {Map<string, Path2D>} */
-    this.borderPaths = new Map(Object.entries(map.borders).map(([k, d]) => [k, new Path2D(d)]));
-    this.outerPaths = map.outer.map(d => new Path2D(d));
-    this.land = new Path2D(map.land);
-    this.neutral = new Path2D(map.neutral);
-    this.owner = map.provinces.map(p => p.i);
-    /** @type {boolean[]} */
-    this.dead = map.provinces.map(() => false);
-    const xs = map.provinces.flatMap(p => [p.bbox[0], p.bbox[2]]), ys = map.provinces.flatMap(p => [p.bbox[1], p.bbox[3]]);
-    this.bounds = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+    /** @type {MapData} */ this.map = map;
+    /** @type {Path2D[]} */ this.paths = [];
+    /** @type {Map<string, Path2D>} */ this.borderPaths = new Map();
+    /** @type {Path2D[]} */ this.outerPaths = [];
+    this.land = new Path2D(); this.neutral = new Path2D();
+    /** @type {number[]} */ this.owner = [];
+    /** @type {boolean[]} */ this.dead = [];
+    /** @type {number[]} */ this.bounds = [0, 0, 1, 1];
+    this.setMap(map, false);
     this.insets = {top:0, bottom:0, left:0, right:0};
     this.W = innerWidth; this.H = innerHeight;
     /** @type {Cam} */ this.cam = {x:map.w / 2, y:map.h / 2, s:.4};
@@ -89,6 +102,25 @@ export class MapView {
     /** @param {number} ms @returns {Promise<unknown>} */
     this.wait = ms => new Promise(r => setTimeout(r, ms));
     this.resize();
+  }
+
+  /**
+   * Cambia la geometría (el escenario de la península añade Portugal).
+   * @param {MapData} map @param {boolean} [redraw]
+   */
+  setMap(map, redraw = true) {
+    if (redraw && map === this.map) return;
+    this.map = map;
+    this.paths = map.provinces.map(p => new Path2D(p.d));
+    this.borderPaths = new Map(Object.entries(map.borders).map(([k, d]) => [k, new Path2D(d)]));
+    this.outerPaths = map.outer.map(d => new Path2D(d));
+    this.land = new Path2D(map.land);
+    this.neutral = new Path2D(map.neutral);
+    this.owner = map.provinces.map(p => p.i < 47 ? p.i : -1);
+    this.dead = map.provinces.map(() => false);
+    const xs = map.provinces.flatMap(p => [p.bbox[0], p.bbox[2]]), ys = map.provinces.flatMap(p => [p.bbox[1], p.bbox[3]]);
+    this.bounds = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+    if (redraw) { this.rebuild(); this.invalidate(); }
   }
 
   /* ---------- Tamaño y cámara ---------- */
@@ -158,6 +190,7 @@ export class MapView {
   /** @param {number[]} owner @param {boolean[]} [dead] bandos eliminados */
   setOwners(owner, dead) {
     this.wave = null;
+    if (owner.length < this.map.provinces.length) owner = [...owner, ...new Array(this.map.provinces.length - owner.length).fill(-1)];
     const changed = owner.flatMap((o, p) => o !== this.owner[p] ? [p] : []);
     const deadChanged = dead && dead.some((v, i) => v !== this.dead[i]);
     this.owner = [...owner]; if (dead) this.dead = [...dead];
@@ -232,14 +265,11 @@ export class MapView {
     this.version = (this.version || 0) + 1;
     this.dirty = true;
   }
-  /** Colores del tema para el mar y la tierra neutral. */
-  pal() {
-    return this.theme === 'atlas'
-      ? {neutral:'#D9C9A6', neutralEdge:'rgba(90,64,30,.45)', grid:'rgba(90,64,30,.12)', shadow:'rgba(70,45,15,.45)', coast:'rgba(70,110,140,.35)', ink:'#2B1E10', halo:'rgba(250,240,220,.85)', dim:'rgba(236,224,196,.62)', line:'rgba(40,25,10,.7)'}
-      : {neutral:'#15233D', neutralEdge:'rgba(140,175,230,.22)', grid:'rgba(120,170,255,.07)', shadow:'rgba(0,0,0,.65)', coast:'rgba(110,190,255,.28)', ink:'#FFFFFF', halo:'rgba(4,10,24,.8)', dim:'rgba(3,8,20,.66)', line:'rgba(6,10,22,.85)'};
-  }
+  /** Colores y efectos del tema. */
+  pal() { return THEMES[/** @type {'marina'} */ (this.theme)] || THEMES.marina; }
   /** Relleno con luz de una provincia: degradado del color del bando según su caja. @param {CanvasRenderingContext2D} x @param {number} p @param {string} col */
   fillProvince(x, p, col) {
+    if (this.pal().flat) { x.fillStyle = col; x.fill(this.paths[p], 'evenodd'); return; }
     const b = this.map.provinces[p].bbox;
     const g = x.createLinearGradient(b[0], b[1], b[2], b[3]);
     g.addColorStop(0, lighten(col, .16)); g.addColorStop(.55, col); g.addColorStop(1, darken(col, .2));
@@ -247,6 +277,7 @@ export class MapView {
   }
   /** Borde interior oscuro fino y bisel de luz. @param {CanvasRenderingContext2D} x @param {number} p @param {string} col @param {number} u unidad (1 px de pantalla en vista general) */
   rimProvince(x, p, col, u) {
+    if (this.pal().flat) return;
     x.save(); x.clip(this.paths[p], 'evenodd');
     x.strokeStyle = alpha(darken(col, .6), .55); x.lineWidth = 2.6 * u; x.stroke(this.paths[p]);
     x.strokeStyle = alpha(lighten(col, .55), .32); x.lineWidth = 5.2 * u; x.globalCompositeOperation = 'source-atop';
@@ -255,8 +286,9 @@ export class MapView {
   }
   /** Brillo del color del bando en sus fronteras con otros bandos. @param {CanvasRenderingContext2D} x @param {number} p @param {number} u @param {number} [boost] */
   glowProvince(x, p, u, boost = 1) {
-    const f = this.owner[p], col = this.colors[f], keys = [];
-    if (f < 0 || !col) return;
+    const f = this.owner[p], col = this.colors[f], keys = [], gl = this.pal().glow;
+    if (f < 0 || !col || !gl) return;
+    boost *= gl;
     for (const q of this.map.provinces[p].adj) if (this.owner[q] !== f) keys.push(borderKey(p, q));
     const outer = this.outerPaths[p];
     x.save(); x.clip(this.paths[p], 'evenodd');
@@ -281,7 +313,7 @@ export class MapView {
     x.strokeStyle = P.neutralEdge; x.lineWidth = 1.1 * u; x.stroke(this.neutral);
     x.restore();
     // líneas de agua alrededor de la costa (como en los mapas antiguos)
-    if (!only) this.waterlines(x, k, u);
+    if (!only && P.water) this.waterlines(x, k, u);
     // sombra de la península y luz de costa
     x.save();
     x.shadowColor = P.shadow; x.shadowBlur = 26 * u * k; x.shadowOffsetY = 7 * u * k;
@@ -291,21 +323,23 @@ export class MapView {
     // provincias
     each(p => this.fillProvince(x, p, this.provColor(p)));
     // luz general desde arriba a la izquierda y textura
-    x.save(); x.clip(this.land, 'evenodd');
-    const lg = x.createRadialGradient(m.w * .3, m.h * .15, 0, m.w * .45, m.h * .45, m.w * .8);
-    lg.addColorStop(0, 'rgba(255,255,255,.16)'); lg.addColorStop(.5, 'rgba(255,255,255,0)'); lg.addColorStop(1, 'rgba(0,0,20,.28)');
-    x.fillStyle = lg; x.fillRect(0, 0, m.w, m.h);
-    x.globalCompositeOperation = 'overlay'; x.globalAlpha = .1;
-    const pat = x.createPattern(this.noise, 'repeat');
-    if (pat) { pat.setTransform(new DOMMatrix().scale(1 / k)); x.fillStyle = pat; x.fillRect(0, 0, m.w, m.h); }
-    x.restore();
-    // relieve: sombreado de las cordilleras y, en invierno, nieve en las cumbres
-    if (this.relief) {
+    if (!P.flat) {
       x.save(); x.clip(this.land, 'evenodd');
-      x.globalCompositeOperation = 'overlay'; x.globalAlpha = this.theme === 'atlas' ? .5 : .62;
+      const lg = x.createRadialGradient(m.w * .3, m.h * .15, 0, m.w * .45, m.h * .45, m.w * .8);
+      lg.addColorStop(0, 'rgba(255,255,255,.16)'); lg.addColorStop(.5, 'rgba(255,255,255,0)'); lg.addColorStop(1, 'rgba(0,0,20,.28)');
+      x.fillStyle = lg; x.fillRect(0, 0, m.w, m.h);
+      x.globalCompositeOperation = 'overlay'; x.globalAlpha = P.noise;
+      const pat = x.createPattern(this.noise, 'repeat');
+      if (pat) { pat.setTransform(new DOMMatrix().scale(1 / k)); x.fillStyle = pat; x.fillRect(0, 0, m.w, m.h); }
+      x.restore();
+    }
+    // relieve: sombreado de las cordilleras y, en invierno, nieve en las cumbres
+    if (this.relief && P.relief) {
+      x.save(); x.clip(this.land, 'evenodd');
+      x.globalCompositeOperation = 'overlay'; x.globalAlpha = P.relief;
       x.drawImage(this.relief, 0, 0, m.w, m.h);
       x.globalCompositeOperation = 'source-over';
-      if (this.winter) {
+      if (this.winter && !P.flat) {
         if (!this.snowMask) {
           const c = document.createElement('canvas'); c.width = this.relief.width; c.height = this.relief.height;
           const cx = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
@@ -330,7 +364,7 @@ export class MapView {
     }
     x.setLineDash([]);
     // costa: línea clara y nítida
-    x.strokeStyle = this.theme === 'atlas' ? 'rgba(60,40,15,.75)' : 'rgba(230,240,255,.55)'; x.lineWidth = 1.1 * u; x.stroke(this.land);
+    x.strokeStyle = P.coastLine; x.lineWidth = 1.1 * u; x.stroke(this.land);
     x.restore();
   }
   /** Líneas paralelas a la costa en el mar. @param {CanvasRenderingContext2D} x @param {number} k @param {number} u */
@@ -344,14 +378,16 @@ export class MapView {
       l.globalCompositeOperation = 'destination-out'; l.globalAlpha = 1; l.lineWidth = (d * 2 - 1.1) * u; l.stroke(this.land);
     }
     x.save(); x.setTransform(1, 0, 0, 1, 0, 0);
-    x.globalAlpha = this.theme === 'atlas' ? .3 : .13; x.drawImage(c, 0, 0);
+    x.globalAlpha = this.pal().water; x.drawImage(c, 0, 0);
     x.restore();
   }
   /** @param {number} p */
   provColor(p) {
     const f = this.owner[p];
-    if (f < 0 || !this.colors[f]) return this.theme === 'atlas' ? '#CDBF9F' : '#3A4560';
-    return this.dead[f] ? desaturate(this.colors[f], .9) : this.colors[f];
+    const P = this.pal();
+    if (f < 0 || !this.colors[f]) return P.empty;
+    const c = P.tint ? mix(this.colors[f], P.tint[0], P.tint[1]) : this.colors[f];
+    return this.dead[f] ? desaturate(c, .9) : c;
   }
   /** Colores por bando (modo conquista). @param {string[]} colors */
   setColors(colors) { this.colors = colors; this.rebuild(); this.invalidate(); }
@@ -519,6 +555,7 @@ export class MapView {
     x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
     for (const p of this.map.provinces) {
       const act = this.active.has(p.i) || this.hop === p.i;
+      if (!(this.owner[p.i] >= 0)) continue; // fuera de juego
       const room = p.room * s;
       if (room < 9 && !act) continue;
       const size = clamp(room * .42, 8.5, act ? 17 : 13.5);
