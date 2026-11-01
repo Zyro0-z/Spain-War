@@ -18,7 +18,7 @@ De Wikimedia Commons, rasterizadas a 360×240 con `npm run flags`.
 | --- | --- | --- | --- |
 | Álava | [Flag of Álava.svg](https://commons.wikimedia.org/wiki/File:Flag_of_%C3%81lava.svg) | HansenBCN | CC BY-SA 4.0 |
 | Albacete | [Bandera provincia Albacete.svg](https://commons.wikimedia.org/wiki/File:Bandera_provincia_Albacete.svg) | Espanish AlB; SanchoPanzaXXI; HansenBCN | CC BY-SA 4.0 |
-| Alicante | [Flag maritime alicante.svg](https://commons.wikimedia.org/wiki/File:Flag_maritime_alicante.svg) | No machine-readable author provided. Banderas assumed (based on copyright claims). | Public domain |
+| Alicante | [Flag of Alicante.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Alicante.svg) | Mutxamel, based on SanchoPanzaXXI's work | CC BY-SA 4.0 |
 | Almería | [Flag Almería Province.svg](https://commons.wikimedia.org/wiki/File:Flag_Almer%C3%ADa_Province.svg) | Almju | CC BY-SA 4.0 |
 | Ávila | [Bandera de la provincia de Ávila.svg](https://commons.wikimedia.org/wiki/File:Bandera_de_la_provincia_de_%C3%81vila.svg) | Rastrojo (D•ES) | CC BY-SA 4.0 |
 | Badajoz | [Provincia de Badajoz - Bandera.svg](https://commons.wikimedia.org/wiki/File:Provincia_de_Badajoz_-_Bandera.svg) | HansenBCN | CC BY-SA 3.0 |
@@ -26,8 +26,10 @@ De Wikimedia Commons, rasterizadas a 360×240 con `npm run flags`.
 | Burgos | [Flag Burgos Province.svg](https://commons.wikimedia.org/wiki/File:Flag_Burgos_Province.svg) | HansenBCN | CC BY-SA 4.0 |
 | Cáceres | [Flag of the province of Cáceres.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_province_of_C%C3%A1ceres.svg) | Ewan ar Born, Rastrojo and Offnfopt | CC BY-SA 3.0 |
 | Cádiz | [Flag Cádiz Province.svg](https://commons.wikimedia.org/wiki/File:Flag_C%C3%A1diz_Province.svg) | Ulaidh | CC BY-SA 4.0 |
+| Castellón | [Bandera de Castelló de la Plana.svg](https://commons.wikimedia.org/wiki/File:Bandera_de_Castell%C3%B3_de_la_Plana.svg) | Mutxamel | Public domain |
 | Ciudad Real | [Flag Ciudad Real Province.svg](https://commons.wikimedia.org/wiki/File:Flag_Ciudad_Real_Province.svg) | Ulaidh | CC BY-SA 4.0 |
 | Córdoba | [Provincia de Córdoba - Bandera.svg](https://commons.wikimedia.org/wiki/File:Provincia_de_C%C3%B3rdoba_-_Bandera.svg) | HansenBCN | CC BY-SA 3.0 |
+| A Coruña | [BanderaLaCoruna.jpg](https://commons.wikimedia.org/wiki/File:BanderaLaCoruna.jpg) | HASEGAWA72 | CC BY-SA 4.0 |
 | Cuenca | [Flag Cuenca Province.svg](https://commons.wikimedia.org/wiki/File:Flag_Cuenca_Province.svg) | HansenBCN | CC BY-SA 4.0 |
 | Girona | [Bandera de la provincia de Gerona.png](https://commons.wikimedia.org/wiki/File:Bandera_de_la_provincia_de_Gerona.png) | Realizado por Eduardo Panizo Gómez y extraído, con su consentimiento, de su página web Vexilla Hispánica, de dirección h | CC BY-SA 3.0 |
 | Granada | [Bandera de la provincia de Granada (España).svg](https://commons.wikimedia.org/wiki/File:Bandera_de_la_provincia_de_Granada_(Espa%C3%B1a).svg) | Erlenmeyer | CC BY-SA 3.0 |
@@ -40,7 +42,7 @@ De Wikimedia Commons, rasterizadas a 360×240 con `npm run flags`.
 | Lleida | [Bandera antiga de la província de Lleida.svg](https://commons.wikimedia.org/wiki/File:Bandera_antiga_de_la_prov%C3%ADncia_de_Lleida.svg) | HansenBCN | CC BY-SA 3.0 |
 | La Rioja | [Flag of La Rioja (with coat of arms).svg](https://commons.wikimedia.org/wiki/File:Flag_of_La_Rioja_(with_coat_of_arms).svg) | jynus | CC BY 2.5 |
 | Lugo | [Flag of Lugo province.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Lugo_province.svg) | Ulaidh | CC BY-SA 4.0 |
-| Madrid | [Bandera de la Provincia de Madrid hasta 1983.svg](https://commons.wikimedia.org/wiki/File:Bandera_de_la_Provincia_de_Madrid_hasta_1983.svg) | HansenBCN | CC BY-SA 4.0 |
+| Madrid | [Flag of the Community of Madrid.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Community_of_Madrid.svg) | See file history | CC0 |
 | Málaga | [Flag Málaga Province.svg](https://commons.wikimedia.org/wiki/File:Flag_M%C3%A1laga_Province.svg) | HansenBCN | CC BY-SA 4.0 |
 | Murcia | [Bandera de la Diputación Provincial de Murcia.svg](https://commons.wikimedia.org/wiki/File:Bandera_de_la_Diputaci%C3%B3n_Provincial_de_Murcia.svg) | HansenBCN | CC BY-SA 3.0 |
 | Navarra | [Bandera de Navarra.svg](https://commons.wikimedia.org/wiki/File:Bandera_de_Navarra.svg) | Miguillen | Public domain |
@@ -59,4 +61,5 @@ De Wikimedia Commons, rasterizadas a 360×240 con `npm run flags`.
 | Valencia | [Flag of the Land of Valencia (official).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Land_of_Valencia_(official).svg) | Mutxamel | Public domain |
 | Valladolid | [Bandera de la provincia de Valladolid.svg](https://commons.wikimedia.org/wiki/File:Bandera_de_la_provincia_de_Valladolid.svg) | Original: Vexilla Hispanica. Vectorization: Chabacano | CC BY-SA 3.0 |
 | Bizkaia | [Bandera de Vizcaya.svg](https://commons.wikimedia.org/wiki/File:Bandera_de_Vizcaya.svg) | SanchoPanzaXXI | CC BY-SA 4.0 |
+| Zamora | [Bandera de Zamora.svg](https://commons.wikimedia.org/wiki/File:Bandera_de_Zamora.svg) | Unknown | Public domain |
 | Zaragoza | [Bandera de la provincia de Zaragoza.svg](https://commons.wikimedia.org/wiki/File:Bandera_de_la_provincia_de_Zaragoza.svg) | David Ll L | CC BY-SA 4.0 |
