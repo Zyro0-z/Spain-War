@@ -9,6 +9,8 @@ Estrategia por turnos con las 47 provincias de la España peninsular: elige un b
   <img src="docs/tactica.jpg" width="200" alt="Ataque con tipos de tropa y táctica">
   <img src="docs/reclutar.jpg" width="200" alt="Reclutar infantería, caballería, artillería o milicia">
   <img src="docs/gobierno.jpg" width="200" alt="Gobierno: consejo de ministros y misión">
+  <img src="docs/saberes.jpg" width="200" alt="Árbol de saberes">
+  <img src="docs/informe.jpg" width="200" alt="Informe de provincia con el desglose de oro, tropas, lealtad y defensa">
   <img src="docs/peninsula.jpg" width="200" alt="Elegir bando: la península con Portugal">
   <img src="docs/bandera.jpg" width="200" alt="Editor de bandera">
   <img src="docs/cronica.jpg" width="200" alt="Crónica en forma de periódico">

@@ -158,6 +158,20 @@ async function main() {
   const cred = path.join(ROOT, 'CREDITS.md'), txt = fs.readFileSync(cred, 'utf8').replace(/\n## Banderas[\s\S]*$/, '');
   fs.writeFileSync(cred, `${txt.trimEnd()}\n\n## Banderas\n\nDe Wikimedia Commons, rasterizadas a 360×240 con \`npm run flags\`.\n\n| Provincia | Archivo | Autor | Licencia |\n| --- | --- | --- | --- |\n${rows.join('\n')}\n`);
   if (missing.length) console.log('\nSin bandera:\n- ' + missing.join('\n- '));
+  // diagnóstico para las que faltan: lo que hay en Commons con su nombre (para elegir a mano)
+  const diag = [];
+  for (const p of map.provinces.filter(x => !manifest[x.ine])) {
+    const short = p.name.split('/')[0].trim(), names = [short, ...(/** @type {Record<string, string[]>} */ (ALIAS)[p.name] || [])];
+    const cat = (await categoryFiles()).filter(t => names.some(n => norm(t).includes(norm(n))));
+    const found = [];
+    for (const q of names.map(n => `${n} bandera provincia`).concat(names.map(n => `${n} flag province`))) {
+      const d = await json('https://commons.wikimedia.org/w/api.php?action=query&format=json&list=search&srnamespace=6&srlimit=15&srsearch=' + encodeURIComponent(q)).catch(() => null);
+      found.push(...((d && d.query?.search) || []).map((/** @type {{title:string}} */ x) => x.title));
+      await sleep(600);
+    }
+    diag.push(`## ${p.name} (${p.ine})`, `categorías: ${cat.join(' | ') || '—'}`, `búsqueda: ${[...new Set(found)].join(' | ') || '—'}`, '');
+  }
+  fs.writeFileSync(path.join(OUT, 'faltan.txt'), diag.length ? diag.join('\n') + '\n' + missing.join('\n') + '\n' : 'ninguna\n');
   console.log(`\n${Object.keys(manifest).length} de ${map.provinces.length} banderas`);
 }
 main().catch(e => { console.error(e); process.exit(1); });
