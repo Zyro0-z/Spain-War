@@ -1,4 +1,4 @@
-# España en Guerra · Diseño del juego (v4, conquista por turnos)
+# España en Guerra · Diseño del juego (v5, conquista por turnos)
 
 Juegas con un bando y conquistas España provincia a provincia. No hay ruleta: tú decides a quién atacas y cuándo.
 Todo el motor es determinista (generador con semilla, solo aritmética entera) para poder repetir partidas y
@@ -170,6 +170,120 @@ relación (mucho si es asesinato o soborno).
 Guerra, hacienda y diplomacia. Cada ministro tiene un rasgo (p. ej. reclutador, recaudador, embajador) y da consejo
 según la situación: fronteras, oro guardado, huecos libres, vecinos dispuestos a pactar. Cambiar uno cuesta 40.
 
+## El reino por dentro (v5)
+
+### Población y estamentos
+
+Cada provincia tiene población (miles, a escala de juego, a partir de la real) y cuatro estamentos con su contento
+(0–100): campesinos, burgueses, nobles y clero. La población crece con granjas, hospitales y campesinos contentos;
+reclutar gasta mil por tropa (salvo milicia o con la ley de mercenarios) y la guarnición no crece por encima de la
+mitad de la población. Lo que pasa de su población inicial da oro.
+
+| Estamento | Le gusta | Si cae por debajo de 20 |
+| --- | --- | --- |
+| Campesinos | Impuestos bajos, granjas, grano, Agricultura | Revuelta: −30 % de tropas y −20 de lealtad |
+| Burgueses | Mercados, puertos, rutas, Cortes, Libre comercio | Huelga: oro a la mitad |
+| Nobles | Fueros, Cortes, levas feudales, la Mesta | Levantamiento: la provincia se subleva |
+| Clero | Catedrales, Inquisición | −5 de lealtad |
+
+La media de los estamentos suma o resta lealtad (de −5 a +5).
+
+### Recursos y mercado
+
+Grano, madera, hierro, caballos y pólvora, según la especialidad, el terreno y los edificios (granja, mina; la
+pólvora llega con el saber Pólvora). Cosecha doble en otoño y la mitad en invierno. Las tropas comen grano (una
+unidad por cada 12 de guarnición y por cada 6 en campaña); sin grano hay hambre y deserciones. Los jinetes piden
+caballos, los cañones hierro y pólvora, las obras madera (y hierro las pesadas) y los barcos madera. Se compra y
+vende en el mercado (mercado, puerto o capital): los precios suben con la demanda, bajan con la oferta y la plata
+de las Indias trae inflación.
+
+### Administración y regiones
+
+Capacidad administrativa: 8 + 2 por era + 3 por nivel de Audiencia + leyes y objetivos. Cada provincia suelta cuesta 1
+y cada región 2, tenga las que tenga; si te pasas, −5 % de oro por punto (hasta −50 %) y menos lealtad.
+
+**Regiones**: 2 o más provincias tuyas que se tocan, fuera de otras regiones y con lealtad 90 se unifican (40 + 10 por
+provincia). Dentro se mueve sin límite de alcance, la lealtad sube 2 por turno, rinden un 5 % más, los impuestos se
+cambian a la vez y en el mapa, de lejos, se ven como una sola ficha con el total. Una provincia que baja de 50 de
+lealtad o se pierde sale de la región. La **Audiencia** (en la sede) da administración y lealtad.
+
+**Gobernadores** (40): rasgo (capaz, corrupto, severo, popular) y política: económica (construye), militar (recluta
+en la frontera) o defensiva (fortifica y levanta milicia), con un presupuesto del 0 al 30 % del oro de cada turno.
+
+### Corte
+
+- **Rey**: edad, rasgo (el del líder), boda y heredero. Cada año puede nacer un heredero (si está casado) y puede
+  morir (más cuanto mayor). Heredero menor de 16: regencia. Sin heredero: crisis de sucesión (−25 de estabilidad,
+  posible guerra civil) o, si hay boda con un reino mayor, **unión dinástica** (pasa a ser su vasallo).
+- **Facciones**: nobleza, Iglesia, burguesía y ejército, con apoyo (0–100) y poder (según las leyes). Con poco apoyo
+  castigan (menos levas, menos lealtad, comercio a la mitad, −10 % de ataque); una facción poderosa por debajo de 12
+  puede provocar una **guerra civil** que se lleva las provincias menos leales.
+- **Estabilidad** (0–100): tiende a su nivel según la corte, la religión, la regencia, el cansancio y la infamia; suma
+  o resta lealtad y, por debajo de 30, oro.
+
+### Leyes
+
+Cambiar una ley cuesta 30, necesita el apoyo del 40 % del poder (o imponerla: −15 de estabilidad y las facciones
+contrarias se enfadan) y no se puede tocar en 10 turnos.
+
+| Ley | Opciones |
+| --- | --- |
+| Gobierno | Absolutismo (+2 administración) · Cortes (impuestos altos −3 de lealtad) |
+| Territorios | Fueros (+3 de lealtad en otras culturas) · Centralismo (+3 administración, asimilación doble) |
+| Ejército | Levas feudales (infantería −1) · Profesional (+10 % ataque, +25 % mantenimiento) · Mercenarios (compañías −30 %, sin gastar población) |
+| Religión | Tolerancia (+1 saber) · Inquisición (+1 estabilidad, −1 saber) |
+| Campo | Privilegios de la Mesta (+oro y caballos con ganado) · Agricultura (+1 grano por provincia) |
+| Comercio | Gremios (edificios −5 %) · Libre comercio (+1 por ruta) |
+
+## Guerra (v5)
+
+### Ejércitos de campaña
+
+Hasta 2 + era ejércitos con nombre, formados con tropas listas de una provincia (y su general). Marchan por tierra
+propia, aliada o con **paso militar** hasta su destino, varias provincias por turno (más a marchas forzadas, con
+desgaste), y suman su fuerza a la defensa de la provincia donde estén. Moral (fuerza del 60 al 100 %) y experiencia
+(+5 % / +10 %). En tierra propia con suministro comen grano y recuperan moral; fuera gastan víveres (3 turnos) y,
+sin ellos, pierden un 10 % por turno. Al conquistar dejan una guarnición. **Mercenarios** (50): una compañía al
+momento, sin población ni recursos, 4 de oro por turno; si no cobran, se van.
+
+### Batallas por fases
+
+Escaramuza (manda la artillería), choque (la infantería) y carga decisiva (la caballería). Gana quien se lleva dos
+fases; cada fase es un 3d6 por «suma × fuerza» con el peso de cada tropa, así que la probabilidad sigue siendo exacta.
+Si un lado gana las dos primeras, la tercera es la persecución. Plan de batalla: **carga de caballería** (fuerte en la
+escaramuza, más bajas de jinetes), **reserva** (−25 % en la escaramuza, +25 % en el choque) o **retirada a tiempo**
+(si pierdes la escaramuza, te retiras con pocas bajas).
+
+### Asedios
+
+Asedio (brecha cada turno), **bloqueo** (los víveres de dentro se acaban y luego la guarnición muere de hambre) o
+**minar** (brecha doble con bajas propias). Se puede **negociar la rendición** cuando dentro hay hambre, tienes 4
+veces más tropas o pagas la mitad de su valor.
+
+### Tratados, puntuación de guerra e infamia
+
+Las victorias y conquistas suben la **puntuación de guerra**. Con ella se firma la paz pidiendo provincias, oro o
+vasallaje: acepta si lo pedido (6 + 3 por nivel de cada provincia, oro / 5, vasallaje 30) cabe en la puntuación más su
+cansancio. Los bots que van ganando también lo exigen. Conquistar da **infamia** (2 + nivel por provincia, más por
+capitales y tratados); baja 1 por turno y, por encima de 40, enfría a todos.
+
+## Sucesos encadenados
+
+Peste negra (se extiende por las vecinas; cuarentena o procesiones), revuelta de las Comunidades (negociar o reprimir),
+pleito de la Mesta, expedición a las Indias (150 de oro: luego +25 por turno, inflación y piratas si tienes menos de
+5 barcos), hambrunas regionales en otoño (importar o requisar) y censura de la imprenta.
+
+## Objetivos
+
+Un árbol propio por bando según su tierra: unificar su comunidad, salida al mar, primera región, reformar una ley, la
+corona de su reino histórico, el Renacimiento, un ejército de 30, una maravilla, una capital vecina y 15 provincias,
+con premios permanentes (administración, oro, estabilidad).
+
+## Órdenes y obras
+
+Reclutar hasta un número cada turno, **punto de reunión** al que la retaguardia manda lo que le sobra, y obras que
+tardan tantos turnos como el nivel (hasta dos a la vez, se pueden acelerar con oro). En el mapa se ven con andamios.
+
 ## Dificultad
 
 | | Fácil · Paz | Normal · Tensión | Difícil · Guerra total |
@@ -212,7 +326,14 @@ según la situación: fronteras, oro guardado, huecos libres, vecinos dispuestos
 - **Fichas por nivel de zoom**: de lejos, solo el número (y una corona en las capitales); al acercar, insignia del tipo
   de tropa dominante, castillo y bandera en las capitales e insignia del edificio principal (dorada si hay maravilla).
 - **Fronteras** en vectorial siempre: finas y nítidas a cualquier zoom; dentro de un mismo bando, discontinuas y suaves.
-- **Informe de provincia** (tocando los datos de la ficha): desglose de oro, tropas por turno, lealtad y defensa.
+- **Informe de provincia** (tocando los datos de la ficha): desglose de oro, tropas por turno, lealtad, defensa,
+  población, estamentos y producción.
+- **Vista de ciudad**: panorama con el cielo de la estación, el relieve, el mar, casas según la población, los edificios
+  en sus solares (con andamios si están en obras y dañados si hay asedio), murallas y maravilla.
+- **Edificios** que crecen con el nivel (alas y estandarte) y ciudades vivas: molinos que giran, humo de las fraguas y
+  barcas en el puerto.
+- **Ejércitos** con figuras (piqueros, jinetes, cañones), estandarte y número; **regiones** con su contorno dorado;
+  retratos de reyes, herederos y gobernadores; y una escena de batalla donde los dos ejércitos chocan en cada fase.
 - **Batallas**: flecha, marcha de la ficha, choque de espadas con onda y chispas en la frontera, dados y bajas que suben
   sobre las dos provincias.
 

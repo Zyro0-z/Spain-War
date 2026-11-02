@@ -92,7 +92,7 @@ export function armyAction(geo, g, a) {
       sync(g, a.p); P.ready[a.p] = Math.max(0, P.ready[a.p] - n);
       const n0 = armiesOf(g, f).filter(x => !x.merc).length;
       const gen = generalAt(g, a.p);
-      const army = {id:++g.armySeq, f, name:`${ROMAN[n0] || n0 + 1} Ejército`, p:a.p, u:v, morale:80, xp:0, food:3, dest:-1, forced:false, ready:false, merc:false, gen:gen && gen.f === f && a.gen ? gen.id : -1};
+      const army = {id:++g.armySeq, f, name:`${ROMAN[n0] || n0 + 1} Ejército`, p:a.p, u:v, morale:80, xp:0, food:3, dest:-1, forced:false, ready:true, merc:false, gen:gen && gen.f === f && a.gen ? gen.id : -1};
       g.armies.push(army);
       emit(g, {t:'army', f, id:army.id, name:army.name, p:a.p, n});
       return true;

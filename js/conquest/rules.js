@@ -5,8 +5,8 @@
 
 /* ======================= Edificios ======================= */
 /**
- * @typedef {'fortaleza'|'muralla'|'cuartel'|'granja'|'mercado'|'puerto'|'mina'|'catedral'|'universidad'|'astillero'|'torre'|'hospital'|'almacen'|'caminos'} Building
- * @typedef {{name:string, cost:number, max:number, era?:number, coast?:boolean, hills?:boolean, desc:string[]}} BuildingInfo
+ * @typedef {'fortaleza'|'muralla'|'cuartel'|'granja'|'mercado'|'puerto'|'mina'|'catedral'|'universidad'|'astillero'|'torre'|'hospital'|'almacen'|'caminos'|'audiencia'} Building
+ * @typedef {{name:string, cost:number, max:number, era?:number, coast?:boolean, hills?:boolean, region?:boolean, desc:string[]}} BuildingInfo
  */
 /** @type {Record<Building, BuildingInfo>} */
 export const BUILDINGS = {
@@ -24,6 +24,7 @@ export const BUILDINGS = {
   astillero:{name:'Astillero', cost:45, max:3, era:1, coast:true, desc:['Construye 2 barcos por turno', '4 barcos por turno', '6 barcos por turno']},
   almacen:{name:'Almacén', cost:30, max:2, era:2, desc:['Suministro aunque quede aislada; tope +6', 'Tope +12']},
   hospital:{name:'Hospital', cost:40, max:3, era:2, desc:['−15 % de bajas en batallas de aquí', '−30 % de bajas', '−45 % de bajas']},
+  audiencia:{name:'Audiencia', cost:60, max:3, region:true, desc:['+3 de administración y +2 de lealtad en su región', '+6 de administración', '+9 de administración']},
 };
 export const BUILDING_KEYS = /** @type {Building[]} */ (Object.keys(BUILDINGS));
 /** Huecos de edificio según el nivel de población (la capital tiene uno más). @param {number} tier */

@@ -28,3 +28,11 @@ export const WONDER_ICON = 'M-6.5 6.5h13 M-5.5 6.5v-6h11v6 M-6.5 0.5h13 M-4 0.5a
 
 /** Insignia redonda con un pictograma. @param {string} d @param {string} [cls] @param {string} [title] */
 export const glyph = (d, cls = '', title = '') => `<svg class="gly ${cls}" viewBox="-8 -8 16 16" ${title ? `role="img" aria-label="${title}"` : 'aria-hidden="true"'}><circle r="7.6"/><path d="${d}"/></svg>`;
+/** Recursos. */
+export const RES_ICON = {
+  grano:'M0 6.5V-2 M0-2c-2-1-3-3-2-5 2 1 2.5 3 2 5 M0 1c-2-1-3-3-2-5 M0 1c2-1 3-3 2-5 M0 4c2-1 3-3 2-5',
+  madera:'M-6 2.5h12 M-6-1h12 M-6 2.5a1.8 1.8 0 1 1 0-3.5 M6 2.5a1.8 1.8 0 1 0 0-3.5 M-4 6h8 M-4 6a1.6 1.6 0 1 1 0-3.2',
+  hierro:'M-6 3.5-4-2h8L6 3.5Z M-4-2-2.5-4.5h5L4-2',
+  caballos:'M-1 6.5V1.6L-4.6 2Q-6.2 1.8-5.8 0L-3.4-4.3 0.6-6.8 1.4-4.9Q5-3.2 5 1.5V6.5 M-2-2.4h.1',
+  polvora:'M-4.5-5h9v10h-9Z M-4.5-1.5h9 M-4.5 1.5h9 M0-5c1-2 2.5-2.5 3.5-2',
+};

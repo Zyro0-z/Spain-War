@@ -72,6 +72,16 @@ const SCENES = {
     document.querySelector('#wSab').click(); await sleep(900); }`,
   informe:`async () => { __eeg.startWar({sc:'las47', me:__eeg.W.map.provinces.findIndex(x => x.name === 'Valencia'), diff:'normal', seed:'INFORME'}); await sleep(900);
     const w = __eeg.war; w.g.P.bld[w.me] = {mercado:2, granja:1, muralla:1, puerto:1}; w.refresh(); w.select(w.me); await sleep(500); document.querySelector('#cRep').click(); await sleep(900); }`,
+  corte:`async () => { __eeg.startWar({sc:'las47', me:__eeg.W.map.provinces.findIndex(x => x.name === 'Valencia'), diff:'normal', seed:'CORTE'}); await sleep(900);
+    document.querySelector('#wDip').click(); await sleep(500); document.querySelector('[data-tab="corte"]').click(); await sleep(900); }`,
+  vistaciudad:`async () => { __eeg.startWar({sc:'las47', me:__eeg.W.map.provinces.findIndex(x => x.name === 'Valencia'), diff:'normal', seed:'PANO'}); await sleep(900);
+    const w = __eeg.war; w.g.P.bld[w.me] = {mercado:2, granja:2, muralla:1, catedral:1, puerto:1}; w.g.P.queue[w.me] = [{f:w.me, b:'cuartel', lvl:1, left:1, gold:35}]; w.refresh(); w.select(w.me); await sleep(500);
+    document.querySelector('#cCity').click(); await sleep(1000); }`,
+  ejercito:`async () => { __eeg.startWar({sc:'las47', me:__eeg.W.map.provinces.findIndex(x => x.name === 'Valencia'), diff:'normal', seed:'EJERCITO'}); await sleep(900);
+    const w = __eeg.war, g = w.g; g.P.u[w.me] = [24, 6, 0, 2]; g.P.troops[w.me] = 32; g.P.ready[w.me] = 32; g.F.res[w.me].caballos = 20; w.refresh();
+    w.act({type:'army_raise', f:w.me, p:w.me, gen:true}); w.refresh(); w.view.moveTo(w.view.frameOf([w.me, ...w.geo.adj[w.me]], 5), 0); w.select(w.me); await sleep(500);
+    document.querySelector('[data-aa]').click(); await sleep(300); const a = w.g.armies[0], q = w.geo.adj[a.p].find(x => w.g.P.owner[x] !== w.me);
+    w.amountSheet('attack', a.p, q, a.id); await sleep(900); }`,
   peninsula:`async () => { document.querySelector('#mWar').click(); await sleep(700); document.querySelector('[data-sc="peninsula"]').click(); await sleep(400);
     const s = document.querySelector('#wsSel'); s.value = '15'; s.dispatchEvent(new Event('change')); await sleep(1200); }`,
   bandera:`async () => { document.querySelector('#mWar').click(); await sleep(700); document.querySelector('details.adv summary').click(); await sleep(300);

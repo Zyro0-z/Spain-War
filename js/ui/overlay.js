@@ -5,6 +5,7 @@
 import {lighten, darken} from '../art.js';
 import {UNIT_ICON, WONDER_ICON} from './glyphs.js';
 import {buildArtRaw} from './buildart.js';
+import {squad} from './figures.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 /** @param {string} tag @param {Record<string, string|number>} [attrs] */
@@ -28,6 +29,7 @@ export const BUILDING_ICON = {
   astillero:'M-6.5 2h13l-2.6 4h-7.8Z M0 2v-8.5 M.6-6 5-.4H.6 M-.6-5-4.4-.4h3.8',
   almacen:'M-6 6V-1.5L0-5.5l6 4V6Z M-3.6 6V.6h7.2V6 M-3.6 3.3h7.2',
   hospital:'M-1.8-5.6h3.6v3.8h3.8v3.6H1.8v3.8h-3.6V1.8h-3.8v-3.6h3.8Z',
+  audiencia:'M-6 6h12 M-5 6V-1h10v7 M-6.5-1 0-5.5 6.5-1Z M-2.5 6V1.5h5V6 M-3.4 0v6M3.4 0v6',
 };
 
 /** Colores de la insignia de cada tropa: fondo, borde y trazo. */
@@ -37,7 +39,7 @@ const HOUSES = [[0, -4, 7, 6], [-6, 0, 7, 5], [6, 0, 6, 6], [-11, -3.5, 6, 5], [
 const ROOFS = ['#B4532F', '#A2462A', '#C0653A', '#93412A'];
 /**
  * Ciudad dibujada: casas según su tamaño, catedral, murallas, torre, puerto y maravilla.
- * @param {{lvl:number, walls:boolean, church:boolean, tower:boolean, port:boolean, wonder:boolean, seed:number, extra?:string[]}} c
+ * @param {{lvl:number, walls:boolean, church:boolean, tower:boolean, port:boolean, wonder:boolean, seed:number, extra?:string[], lv?:number[], works?:boolean, siege?:boolean, mill?:boolean, smoke?:boolean}} c
  */
 function cityMarkup(c) {
   const n = [3, 4, 6, 8, 10][Math.max(0, Math.min(4, c.lvl - 1))];
@@ -55,9 +57,15 @@ function cityMarkup(c) {
   if (c.port) out += `<path d="M18 9h11l-2 3.2h-7.4Z" fill="#7A4A26" ${ink}/><path d="M23.2 9V1.2M23.8 1.8l4 6.2h-4Z" fill="#F4EEDC" ${ink}/>`;
   // otros edificios, dibujados en pequeño alrededor (atrás primero)
   const spots = [[-31, -8], [31, -8], [-34, 8], [34, 8]];
-  const ex = (c.extra || []).slice(0, 4).map((k, i) => /** @type {[string, number[]]} */ ([k, spots[i]])).sort((a, b) => a[1][1] - b[1][1]);
-  out = ex.filter(([, [, y]]) => y < 0).map(([k, [x, y]]) => `<g transform="translate(${x} ${y}) scale(.3)">${buildArtRaw(k)}</g>`).join('') + out
-    + ex.filter(([, [, y]]) => y >= 0).map(([k, [x, y]]) => `<g transform="translate(${x} ${y}) scale(.3)">${buildArtRaw(k)}</g>`).join('');
+  const ex = (c.extra || []).slice(0, 4).map((k, i) => /** @type {[string, number[], number]} */ ([k, spots[i], c.lv?.[i] || 1])).sort((a, b) => a[1][1] - b[1][1]);
+  const st = c.siege ? 'dañado' : '';
+  out = ex.filter(([, [, y]]) => y < 0).map(([k, [x, y], l]) => `<g transform="translate(${x} ${y}) scale(.3)">${buildArtRaw(k, l, st)}</g>`).join('') + out
+    + ex.filter(([, [, y]]) => y >= 0).map(([k, [x, y], l]) => `<g transform="translate(${x} ${y}) scale(.3)">${buildArtRaw(k, l, st)}</g>`).join('');
+  // vida: molino que gira, humo de las fraguas, andamios de las obras
+  if (c.mill) out += `<g transform="translate(-22 -6)"><path d="M-1.6 6 0-6 1.6 6Z" fill="#E8D8B6" stroke="#3B2410" stroke-width=".5"/><g class="mill" transform="translate(0 -6)"><path d="M0 0-7-1.2-7 1.2ZM0 0 7 1.2 7-1.2ZM0 0-1.2 7 1.2 7ZM0 0 1.2-7-1.2-7Z" fill="#F4EEDF" stroke="#3B2410" stroke-width=".4"/></g></g>`;
+  if (c.smoke) out += `<g class="smk" transform="translate(${c.church ? 10 : 6} -14)"><circle r="2.4"/><circle r="2"/><circle r="1.6"/></g>`;
+  if (c.works) out += `<g transform="translate(-6 -2) scale(.22)" class="works"><path d="M-22 18V-18M-8 18V-22M8 18V-22M22 18V-18M-24-6h48M-24 6h48" stroke="#8A6234" stroke-width="3" fill="none"/><path d="M14-22V-34h16" stroke="#5E4022" stroke-width="3" fill="none"/></g>`;
+  if (c.port) out += `<g class="boat" transform="translate(30 12)"><path d="M-4 0h8l-1.4 2.2h-5.2Z" fill="#7A4A26" stroke="#3B2410" stroke-width=".4"/><path d="M0 0v-5l3 4.2H0Z" fill="#F4EEDC" stroke="#3B2410" stroke-width=".4"/></g>`;
   if (c.wonder) out += `<g transform="translate(${c.port ? -29 : 25} -2)"><circle r="9.5" fill="rgba(255,214,110,.28)"/><path d="${WONDER_ICON}" transform="scale(1.15)" fill="none" stroke="#3A2405" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/><path d="${WONDER_ICON}" transform="scale(1.15)" fill="none" stroke="#FFD66E" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></g>`;
   return out;
 }
@@ -81,6 +89,8 @@ export class Overlay {
     /** Catástrofes en curso (en coordenadas del mapa). */
     this.gCat = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-cat'})));
     this.catKey = '';
+    /** Contorno de las regiones (coordenadas del mapa). */
+    this.gReg = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-reg'})));
     this.gMap = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-map'})));
     this.gSmoke = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-smoke'})));
     /** @type {number[]} */ this.smokeAt = [];
@@ -89,6 +99,10 @@ export class Overlay {
     this.gCity = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-city'})));
     /** @type {Map<number, {g:SVGGElement, key:string}>} */ this.cityEls = new Map();
     this.gTok = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-tok'})));
+    /** Ejércitos de campaña: estandarte, figuras y número. */
+    this.gArmy = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-army'})));
+    /** @type {{p:number, i:number, g:SVGGElement}[]} */ this.armyEls = [];
+    this.armyKey = '';
     /** Textos que suben (+3, −20 de oro…). */
     this.gFx = /** @type {SVGGElement} */ (svg.appendChild(el('g', {class:'ov-fx'})));
     /** @type {Map<number, {g:SVGGElement, bg:SVGRectElement, txt:SVGTextElement, castle:SVGPathElement, extra:SVGTextElement, flag:SVGGElement, cloth:SVGPathElement, pill:SVGGElement, bld:SVGGElement, bldBg:SVGCircleElement, bldIcon:SVGPathElement, bldIn:SVGGElement, crown:SVGPathElement, cap:boolean, clothImg:SVGImageElement, img:string, b:string, shine:SVGRectElement, unit:SVGGElement, unitBg:SVGCircleElement, unitIcon:SVGPathElement, u:number}>} */
@@ -143,7 +157,7 @@ export class Overlay {
   }
   /**
    * Actualiza números y colores.
-   * @param {{owner:number[], troops:(number|null)[], colors:string[], capitals:Set<number>, mine:number, marks?:Map<number, string>, bld?:string[], unit?:number[], flagImg?:string[]}} s
+   * @param {{owner:number[], troops:(number|null)[], colors:string[], capitals:Set<number>, mine:number, marks?:Map<number, string>, bld?:string[], unit?:number[], flagImg?:string[], merged?:Map<number, number>}} s
    */
   update(s) {
     for (const [p, t] of this.tokens) {
@@ -151,7 +165,11 @@ export class Overlay {
       t.bg.setAttribute('fill', darken(col, .25));
       t.bg.setAttribute('stroke', f === s.mine ? '#FFD66E' : lighten(col, .35));
       t.bg.setAttribute('stroke-width', f === s.mine ? '2' : '1.2');
-      t.txt.textContent = n == null ? '?' : String(n);
+      // en una región, de lejos solo se ve la ficha de la sede con el total
+      const mg = s.merged?.get(p);
+      /** @type {any} */ (t).n = n == null ? '?' : String(n); /** @type {any} */ (t).rt = mg != null && mg >= 0 ? String(mg) : null;
+      t.g.classList.toggle('rm', mg === -1); t.g.classList.toggle('rs', mg != null && mg >= 0);
+      t.txt.textContent = this.far && /** @type {any} */ (t).rt ? /** @type {any} */ (t).rt : /** @type {any} */ (t).n;
       t.cap = s.capitals.has(p); t.g.classList.toggle('cap', t.cap);
       t.cloth.setAttribute('fill', col);
       const img = s.flagImg?.[p] || '';
@@ -198,13 +216,13 @@ export class Overlay {
   }
   /**
    * Ciudades: una por provincia, crecen con su categoría y sus edificios. Solo se ven con zoom.
-   * @param {{p:number, lvl:number, walls:boolean, church:boolean, tower:boolean, port:boolean, wonder:boolean, extra?:string[]}[]} list
+   * @param {{p:number, lvl:number, walls:boolean, church:boolean, tower:boolean, port:boolean, wonder:boolean, extra?:string[], lv?:number[], works?:boolean, siege?:boolean, mill?:boolean, smoke?:boolean}[]} list
    */
   cities(list) {
     const seen = new Set();
     for (const c of list) {
       seen.add(c.p);
-      const key = [c.lvl, c.walls, c.church, c.tower, c.port, c.wonder, ...(c.extra || [])].join();
+      const key = [c.lvl, c.walls, c.church, c.tower, c.port, c.wonder, c.works, c.siege, c.mill, c.smoke, ...(c.extra || []), ...(c.lv || [])].join();
       let e = this.cityEls.get(c.p);
       if (!e) { e = {g:/** @type {SVGGElement} */ (el('g', {class:'city'})), key:''}; this.gCity.appendChild(e.g); this.cityEls.set(c.p, e); }
       if (e.key !== key) {
@@ -267,6 +285,33 @@ export class Overlay {
       if (k < 1) requestAnimationFrame(step); else g.remove();
     };
     requestAnimationFrame(step);
+  }
+  /** Contornos de las regiones. @param {{d:string, mine:boolean}[]} list */
+  regions(list) {
+    this.gReg.innerHTML = '';
+    for (const x of list) this.gReg.appendChild(el('path', {d:x.d, class:x.mine ? 'reg mine' : 'reg', 'vector-effect':'non-scaling-stroke'}));
+    this.sync();
+  }
+  /**
+   * Ejércitos de campaña en el mapa.
+   * @param {{id:number, p:number, u:number[], col:string, mine:boolean, name:string, moving:boolean}[]} list
+   */
+  armies(list) {
+    const key = list.map(a => [a.id, a.p, a.u.join('.'), a.moving].join(':')).join('|');
+    if (key === this.armyKey) { this.sync(); return; }
+    this.armyKey = key; this.gArmy.innerHTML = ''; this.armyEls = [];
+    const per = new Map();
+    for (const a of list) {
+      const i = per.get(a.p) || 0; per.set(a.p, i + 1);
+      const n = a.u[0] + a.u[1] + a.u[2] + a.u[3];
+      const g = /** @type {SVGGElement} */ (el('g', {class:'army-tk' + (a.mine ? ' mine' : '') + (a.moving ? ' moving' : '')}));
+      g.innerHTML = `<ellipse cx="6" cy="1" rx="15" ry="3.5" fill="rgba(0,0,0,.35)"/><g class="sq">${squad(a.u, a.col, 4)}</g>
+        <path d="M-8 2V-26" stroke="#2B1A0C" stroke-width="1.4"/><path class="cloth" d="M-8-26h11l-2.6 3.4 2.6 3.4h-11Z" fill="${a.col}" stroke="#2B1A0C" stroke-width=".6"/>
+        <g transform="translate(-8 6)"><rect x="-9" y="-6" width="18" height="12" rx="6" fill="#1B1410" stroke="${a.mine ? '#FFD66E' : a.col}" stroke-width="1.4"/><text y="3.6" text-anchor="middle">${n}</text></g>`;
+      this.gArmy.appendChild(g);
+      this.armyEls.push({p:a.p, i, g});
+    }
+    this.sync();
   }
   /** Frentes de guerra: fronteras entre tú y tus enemigos, en rojo. @param {string[]} paths */
   fronts(paths) {
@@ -370,6 +415,14 @@ export class Overlay {
     const ox = f.x + f.w / 2 - c.x * c.s, oy = f.y + f.h / 2 - c.y * c.s;
     this.gMap.setAttribute('transform', `matrix(${c.s},0,0,${c.s},${ox},${oy})`);
     this.gFront.setAttribute('transform', `matrix(${c.s},0,0,${c.s},${ox},${oy})`);
+    this.gReg.setAttribute('transform', `matrix(${c.s},0,0,${c.s},${ox},${oy})`);
+    {
+      const ka = Math.max(.75, Math.min(1.15, .5 + .3 * c.s / v.fitScale()));
+      for (const a of this.armyEls) {
+        const [x, y] = this.anchor(a.p);
+        a.g.setAttribute('transform', `translate(${(x + 30 + a.i * 22).toFixed(1)} ${(y - 2).toFixed(1)}) scale(${ka.toFixed(3)})`);
+      }
+    }
     this.gCat.setAttribute('transform', `matrix(${c.s},0,0,${c.s},${ox},${oy})`);
     for (const [p, e] of this.cityEls) {
       const pr = this.map.provinces[p], room = pr.room * c.s;
@@ -394,6 +447,7 @@ export class Overlay {
         t.unit.setAttribute('transform', 'translate(-12 0) scale(.86)');
         t.castle.setAttribute('transform', 'translate(-27 5) scale(.82)'); t.flag.setAttribute('transform', 'translate(-27 1) scale(.9)');
         t.bld.setAttribute('transform', 'translate(20 7) scale(.86)'); t.extra.setAttribute('x', far ? '11' : '17');
+        const tt = /** @type {any} */ (t); if (tt.n != null) t.txt.textContent = far && tt.rt ? tt.rt : tt.n;
       }
     }
     for (const [p, t] of this.tokens) {

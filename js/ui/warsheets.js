@@ -6,6 +6,7 @@ import * as E from '../conquest/engine.js';
 import {TERRAIN_NAME} from '../conquest/data.js';
 import {icon} from '../icons.js';
 import {buildArt} from './buildart.js';
+import {courtBody, courtMount, goalsBody, marketSheet, treatySheet, popBlock, regionsSheet, rico} from './realmsheets.js';
 import {sound} from '../fx.js';
 import {esc, fmt, toast, openSheet, closeSheet} from './dom.js';
 import {BUILDING_ICON} from './overlay.js';
@@ -32,16 +33,30 @@ export function recruitSheet(c, p) {
   const room = Math.max(0, 2 * E.cap(geo, g, p) - g.P.troops[p]);
   const canGen = !E.generalAt(g, p) && E.generalsOf(g, f).length < E.maxGenerals(g, f);
   let t = 0, n = 1;
-  const maxFor = (/** @type {number} */ tt) => Math.min(E.COST.maxRecruit, room, Math.floor(g.F.gold[f] / E.unitCost(geo, g, f, p, tt)));
+  const merc = E.law(g, f, 'leva') === 2;
+  const maxFor = (/** @type {number} */ tt) => {
+    let m = Math.min(E.COST.maxRecruit, room, Math.floor(g.F.gold[f] / E.unitCost(geo, g, f, p, tt)));
+    if (tt !== E.MIL && !merc) m = Math.min(m, Math.max(0, g.P.pop[p] - 5));
+    for (const [r, v] of Object.entries(E.unitRes(tt))) m = Math.min(m, Math.floor((g.F.res[f][r] || 0) / v));
+    return m;
+  };
+  const ready = Math.min(g.P.ready[p], g.P.troops[p] - 1) - g.P.u[p][E.MIL];
+  const armies = E.armiesOf(g, f).filter(x => !x.merc).length, canArmy = armies < E.maxArmies(g, f) && ready >= 3;
   const locked = (/** @type {number} */ tt) => !!E.UNITS[tt].era && E.era(g, f) < /** @type {number} */ (E.UNITS[tt].era);
   openSheet({title:'Reclutar', body:`
     <p class="note" style="margin:0 4px 10px">${esc(c.pname(p))} · tienes ${g.F.gold[f]} de oro · caben ${room} tropas más. El mantenimiento sube con las tropas que pasan de la guarnición gratuita.</p>
     <div class="units" role="radiogroup" aria-label="Tipo de tropa">${E.UNITS.map((u, i) => `<button role="radio" aria-checked="${i === t}" data-t="${i}" ${locked(i) ? 'disabled' : ''}>${uico(i)}<b>${u.name}</b><small>${locked(i) ? 'Renacimiento' : `${E.unitCost(geo, g, f, p, i)} de oro`}</small></button>`).join('')}</div>
     <p class="note udesc" id="rD"></p>
+    <p class="note need" id="rN"></p>
     <div class="stepper"><button class="icb glass" id="rMin" aria-label="Menos">−</button><input type="range" id="rR" min="1" max="1" value="1" aria-label="Tropas"><button class="icb glass" id="rMax" aria-label="Más">+</button><b class="num" id="rV">1</b></div>
     <button class="btn" id="rGo">${icon('users')}Reclutar por <span class="num" id="rC">0</span> de oro</button>
     ${canGen ? `<div class="glabel">General (${E.COST.general} de oro)</div><div class="grp">${Object.entries(E.SKILLS).slice(0, 4).map(([k, v]) => `<button class="rowi" data-sk="${k}" ${g.F.gold[f] >= E.COST.general ? '' : 'disabled'}>★<div class="l">${v.name}<small>${v.desc}</small></div></button>`).join('')}</div>
-      <p class="note">Va con las tropas que salen de su provincia y gana habilidades al subir de nivel. Puede caer en batalla. Máximo ${E.maxGenerals(g, f)}.</p>` : ''}`,
+      <p class="note">Va con las tropas que salen de su provincia y gana habilidades al subir de nivel. Puede caer en batalla. Máximo ${E.maxGenerals(g, f)}.</p>` : ''}
+    <div class="glabel">Ejército de campaña (${armies}/${E.maxArmies(g, f)})</div>
+    <div class="grp">
+      <button class="rowi" id="rArmy" ${canArmy ? '' : 'disabled'}>${icon('flag')}<div class="l">Formar un ejército aquí<small>${canArmy ? `Con las ${ready} tropas listas (sin la milicia). Marcha varios turnos, lleva víveres y suma moral y experiencia.` : armies >= E.maxArmies(g, f) ? 'Ya tienes el máximo (más con la era)' : 'Hacen falta 3 tropas listas'}</small></div></button>
+      <button class="rowi" id="rMerc" ${g.F.gold[f] >= E.mercCost(g, f) ? '' : 'disabled'}>${icon('swords')}<div class="l">Contratar mercenarios<small>${E.era(g, f) >= 1 ? '6 infantes, 2 jinetes y 2 cañones' : '7 infantes y 3 jinetes'} sin gastar población ni recursos · ${E.MERC_UPKEEP} de oro por turno; si no cobran, se van</small></div><b class="num cost">${E.mercCost(g, f)}</b></button>
+    </div>`,
     mount:el => {
       const q = (/** @type {string} */ s) => /** @type {HTMLElement} */ (el.querySelector(s));
       const r = /** @type {HTMLInputElement} */ (q('#rR'));
@@ -51,6 +66,8 @@ export function recruitSheet(c, p) {
         r.max = String(Math.max(1, max)); r.value = String(n); r.disabled = max < 1;
         q('#rV').textContent = String(max < 1 ? 0 : n); q('#rC').textContent = String(n * E.unitCost(geo, g, f, p, t));
         q('#rD').textContent = E.UNITS[t].desc + (E.UNITS[t].up === 0 ? '.' : `. Mantenimiento ${E.UNITS[t].up === 2 ? 'doble' : 'normal'}.`);
+        const res = Object.entries(E.unitRes(t)).map(([r2, v]) => `${v} de ${E.RES_INFO[/** @type {E.Res} */ (r2)].name.toLowerCase()} (tienes ${g.F.res[f][r2]})`).join(' y ');
+        q('#rN').textContent = `Población ${g.P.pop[p]} mil${t === E.MIL || merc ? ' (no se gasta)' : ' · cada tropa gasta mil'}${res ? ' · cada una pide ' + res : ''}.`;
         /** @type {HTMLButtonElement} */ (q('#rGo')).disabled = max < 1;
         el.querySelectorAll('[data-t]').forEach(b => b.setAttribute('aria-checked', String(+(/** @type {HTMLElement} */ (b).dataset.t || 0) === t)));
       };
@@ -58,6 +75,8 @@ export function recruitSheet(c, p) {
       q('#rMin').onclick = () => { n--; draw(); };
       q('#rMax').onclick = () => { n++; draw(); };
       each(el, '[data-t]', b => { t = +(b.dataset.t || 0); draw(); });
+      const ra = el.querySelector('#rArmy'); if (ra) /** @type {HTMLElement} */ (ra).onclick = () => { const ev = c.act({type:'army_raise', f, p, gen:true}); if (ev) { sound('conquer'); closeSheet(); toast(`${ev.find(e => e.t === 'army')?.name || 'Ejército'} formado en ${c.pname(p)}`); c.afterAction(ev); c.card(p); } };
+      const rm = el.querySelector('#rMerc'); if (rm) /** @type {HTMLElement} */ (rm).onclick = () => { const ev = c.act({type:'mercs', f, p}); if (ev) { sound('coin'); closeSheet(); toast(`${ev.find(e => e.t === 'mercs')?.name || 'Mercenarios'} a tu servicio`); c.afterAction(ev); c.card(p); } };
       q('#rGo').onclick = () => {
         if (c.act({type:'recruit', f, p, n, t}, true)) { sound('coin'); closeSheet(); c.refresh(); c.card(p); c.feedback(p, `+${n} ${E.UNITS[t].name.toLowerCase()}`, 'gain'); }
       };
@@ -72,26 +91,29 @@ export function recruitSheet(c, p) {
 /* ======================= Construir ======================= */
 /** @param {Conquest} c @param {number} p */
 export function buildSheet(c, p) {
-  const g = c.g, f = c.me, geo = c.geo, used = E.buildingsAt(g, p).length, total = E.slots(geo, g, p);
+  const g = c.g, f = c.me, geo = c.geo, q = g.P.queue[p] || [], used = E.buildingsAt(g, p).length + q.filter(j => j.lvl === 1 && j.b !== '*').length, total = E.slots(geo, g, p);
   const site = geo.wonderSite[p], wonder = site ? /** @type {Record<string, {name:string, cost:number, desc:string}>} */ (E.WONDERS)[site] : null;
   const rows = E.BUILDING_KEYS.map(k => {
-    const b = E.BUILDINGS[k], l = E.lvl(g, p, k), cost = E.buildCost(geo, g, f, p, k);
+    const b = E.BUILDINGS[k], l = E.lvl(g, p, k) + E.queuedLv(g, p, k), cost = E.buildCost(geo, g, f, p, k), mat = E.materials(k, l + 1);
     let why = '';
-    if (l >= b.max) why = 'Al máximo';
+    if (b.region && E.regionOf(g, p)?.seat !== p) return null;
+    if (l >= b.max) why = E.queuedLv(g, p, k) ? 'En obras hasta el máximo' : 'Al máximo';
+    else if (q.length >= 2) why = 'Ya hay dos obras en marcha';
+    else if (!E.hasRes(g, f, mat)) why = `Faltan ${E.missingRes(g, f, mat)}`;
     else if (b.coast && !geo.coast[p]) why = 'Necesita costa';
     else if (b.hills && geo.terrain[p] === 'l') why = 'Necesita montaña o sierra';
     else if (b.era && E.era(g, f) < b.era) why = b.era === 2 ? 'Era Moderna' : 'Renacimiento';
     else if (!l && used >= total) why = 'Sin huecos';
-    return {k, b, l, cost, why, ok:!why && g.F.gold[f] >= cost};
-  }).sort((a, b) => Number(!!a.why) - Number(!!b.why) || b.l - a.l);
+    return {k, b, l, cost, why, ok:!why && g.F.gold[f] >= cost, mat};
+  }).filter(x => !!x).map(x => /** @type {NonNullable<typeof x>} */ (x)).sort((a, b) => Number(!!a.why) - Number(!!b.why) || b.l - a.l);
   openSheet({title:'Construir', body:`
-    <p class="note" style="margin:0 4px 10px">${esc(c.pname(p))} · ${used} de ${total} huecos · tienes ${g.F.gold[f]} de oro. Mejorar un edificio no ocupa hueco nuevo.</p>
+    <p class="note" style="margin:0 4px 10px">${esc(c.pname(p))} · ${used} de ${total} huecos · ${g.F.gold[f]} de oro, ${g.F.res[f].madera} de madera y ${g.F.res[f].hierro} de hierro. Las obras tardan turnos (hasta dos a la vez); mejorar no ocupa hueco nuevo.</p>
     ${wonder && !g.P.wonder[p] ? `<div class="grp wonder-row"><button class="rowi" id="bW" ${g.F.gold[f] >= wonder.cost ? '' : 'disabled'}>${buildArt('maravilla', 'sm')}<div class="l">${esc(wonder.name)}<small>Maravilla única · ${esc(wonder.desc)}</small></div><b class="num cost">${wonder.cost}</b></button></div>` : ''}
-    <div class="grp">${rows.map(x => `<button class="rowi bl" data-b="${x.k}" ${x.ok ? '' : 'disabled'}>${buildArt(x.k, 'sm', x.l)}<div class="l">${x.b.name} ${pips(x.l, x.b.max)}<small>${x.why ? esc(x.why) : (x.l ? 'Nivel ' + (x.l + 1) + ': ' : '') + esc(x.b.desc[Math.min(x.l, x.b.max - 1)])}</small></div>${x.why ? '' : `<b class="num cost">${x.cost}</b>`}</button>`).join('')}</div>`,
+    <div class="grp">${rows.map(x => `<button class="rowi bl" data-b="${x.k}" ${x.ok ? '' : 'disabled'}>${buildArt(x.k, 'sm', x.l)}<div class="l">${x.b.name} ${pips(x.l, x.b.max)}<small>${x.why ? esc(x.why) : (x.l ? 'Nivel ' + (x.l + 1) + ': ' : '') + esc(x.b.desc[Math.min(x.l, x.b.max - 1)]) + ` · ${x.l + 1} turno${x.l ? 's' : ''} · ${x.mat.madera} de madera${x.mat.hierro ? ` y ${x.mat.hierro} de hierro` : ''}`}</small></div>${x.why ? '' : `<b class="num cost">${x.cost}</b>`}</button>`).join('')}</div>`,
     mount:el => {
       each(el, '[data-b]', b => {
         const k = /** @type {E.Building} */ (b.dataset.b);
-        if (c.act({type:'build', f, p, b:k}, true)) { sound('build'); closeSheet(); c.refresh(); c.card(p); c.feedback(p, `${E.BUILDINGS[k].name} ${E.lvl(c.g, p, k) > 1 ? 'nivel ' + E.lvl(c.g, p, k) : ''}`.trim(), 'gain', true); }
+        if (c.act({type:'build', f, p, b:k}, true)) { sound('build'); closeSheet(); c.refresh(); c.card(p); c.feedback(p, `En obras: ${E.BUILDINGS[k].name}`, 'gain', true); }
       });
       const w = el.querySelector('#bW');
       if (w) /** @type {HTMLElement} */ (w).onclick = () => {
@@ -112,11 +134,20 @@ export function governSheet(c, p) {
     <div class="glabel">Postura de defensa</div>
     <div class="grp">${E.STANCES.map((s, i) => `<button class="rowi" role="radio" aria-checked="${(g.P.stance[p] || 0) === i}" data-st="${i}"><div class="l">${s.name}<small>${s.desc}</small></div>${(g.P.stance[p] || 0) === i ? icon('check') : ''}</button>`).join('')}</div>
     <p class="note">El enemigo no ve tu postura salvo que te espíe o tenga una torre de vigía cerca.</p>
-    ${yard ? `<div class="glabel">Astillero</div><div class="grp"><div class="rowi">${glyph(UNIT_ICON[0], 'unit')}<div class="l">Tienes ${g.F.ships[f]} barcos<small>Cada barco lleva ${E.SHIP_CAP} tropas; 1 de oro por turno</small></div></div>
+    <div class="glabel">Órdenes permanentes</div>
+    <div class="grp">
+      <div class="rowi"><div class="l">Reclutar solo hasta ${g.P.auto[p] || 'no'}<div class="chips">${[0, 10, 20, 30, 50].map(v => `<button class="chip ${g.P.auto[p] === v ? 'on' : ''}" data-auto="${v}">${v || 'Nada'}</button>`).join('')}</div><small>Cada turno recluta infantería hasta ese número si hay oro (deja 20 de reserva).</small></div></div>
+      <button class="rowi" role="switch" aria-checked="${g.F.rally[f] === p}" id="gRally"><div class="l">Punto de reunión<small>Las provincias de retaguardia mandan aquí lo que les sobra, un paso por turno.</small></div><span class="switch"></span></button>
+      <button class="rowi" id="gReg">${icon('crown')}<div class="l">${E.regionOf(g, p) ? 'Región ' + esc(/** @type {any} */ (E.regionOf(g, p)).name) : 'Regiones y administración'}<small>Administración ${E.adminUse(g, f)}/${E.adminCap(g, f)}${E.regionOf(g, p) ? '' : g.P.loyal[p] >= 90 ? ' · esta provincia ya puede unificarse' : ` · para unificar hace falta lealtad 90 (tiene ${g.P.loyal[p]})`}</small></div>${icon('chev')}</button>
+    </div>
+    ${yard ? `<div class="glabel">Astillero</div><div class="grp"><div class="rowi">${glyph(UNIT_ICON[0], 'unit')}<div class="l">Tienes ${g.F.ships[f]} barcos<small>Cada barco lleva ${E.shipCap(g, f)} tropas; 1 de oro por turno y 2 de madera al construirlo</small></div></div>
       ${[1, 2 * yard].filter((v, i, a) => a.indexOf(v) === i).map(n => `<button class="rowi" data-sh="${n}" ${g.F.gold[f] >= ship * n ? '' : 'disabled'}><div class="l">Construir ${n} ${n === 1 ? 'barco' : 'barcos'}</div><b class="num cost">${Math.floor(ship * n)}</b></button>`).join('')}</div>` : ''}`,
     mount:el => {
       each(el, '[data-tax]', b => { if (c.act({type:'tax', f, p, lvl:+(b.dataset.tax || 0)}, true)) { closeSheet(); c.refresh(); c.card(p); } });
       each(el, '[data-st]', b => { if (c.act({type:'stance', f, p, s:+(b.dataset.st || 0)}, true)) { closeSheet(); c.refresh(); c.card(p); toast(`Postura: ${E.STANCES[+(b.dataset.st || 0)].name}`); } });
+      each(el, '[data-auto]', b => { if (c.act({type:'autorecruit', f, p, n:+(b.dataset.auto || 0)})) { closeSheet(); setTimeout(() => governSheet(c, p), 300); } });
+      const gr = el.querySelector('#gRally'); if (gr) /** @type {HTMLElement} */ (gr).onclick = () => { if (c.act({type:'rally', f, p:g.F.rally[f] === p ? -1 : p})) { toast(g.F.rally[f] === p ? `Las tropas sobrantes irán a ${c.pname(p)}` : 'Sin punto de reunión'); closeSheet(); setTimeout(() => governSheet(c, p), 300); } };
+      const rg = el.querySelector('#gReg'); if (rg) /** @type {HTMLElement} */ (rg).onclick = () => { closeSheet(); setTimeout(() => regionsSheet(c), 300); };
       each(el, '[data-sh]', b => { const n = +(b.dataset.sh || 1); if (c.act({type:'ships', f, p, n}, true)) { sound('build'); closeSheet(); c.refresh(); c.card(p); c.feedback(p, `+${n} ${n === 1 ? 'barco' : 'barcos'}`, 'gain', true); } });
     }});
 }
@@ -166,7 +197,8 @@ export function factionSheet(c, d) {
   const emb = g.embargo.some(e => e.a === me && e.b === d);
   const opts = /** @type {[string, string, string][]} */ ([]);
   if (g.F.lord[me] === d) opts.push(['independencia', 'Declarar la independencia', 'Dejas de pagarle; si es mucho más fuerte, guerra']);
-  if (st === E.WAR) opts.push(['paz', 'Proponer la paz', '']);
+  if (st === E.WAR) opts.push(['tratado', 'Tratado de paz con condiciones', `Puntuación de guerra ${E.warScore(g, me, d)}: pide provincias, oro o vasallaje`], ['paz', 'Paz sin condiciones', '']);
+  if (st !== E.WAR) opts.push(['paso', 'Pedir paso militar', 'Tus ejércitos podrán cruzar su tierra 20 turnos']);
   if (st === E.PEACE) opts.push(['pacto', 'Pacto de no agresión', `${E.PACT_TURNS} turnos sin atacaros`]);
   if (st !== E.WAR && !E.allied(st)) opts.push(['alianza', 'Proponer alianza', 'Os defendéis mutuamente']);
   if (st === E.ALLY) opts.push(['federacion', 'Federación', 'Compartís suministro y vista']);
@@ -180,18 +212,19 @@ export function factionSheet(c, d) {
   opts.push(['embargo', emb ? 'Levantar el embargo' : 'Embargo comercial', emb ? 'Volvéis a comerciar' : 'Sin rutas comerciales entre vosotros; −15 de relación']);
   if (st !== E.WAR && g.F.lord[me] !== d && g.F.lord[d] !== me) opts.push(['guerra', 'Declarar la guerra', E.friendly(st) || wed ? 'Rompe vuestro acuerdo: traición' : '']);
   const cnt = E.counts(g.P.owner, E.rebels(g) + 1);
-  const chips = [g.F.lord[d] === me ? 'Tu vasallo' : '', g.F.lord[me] === d ? 'Tu señor' : '', wed ? 'Boda' : '', emb ? 'Embargo' : '', `Era ${E.ERAS[E.era(g, d)].name.toLowerCase()}`].filter(Boolean);
+  const chips = [g.F.inf[d] >= 40 ? `Infamia ${g.F.inf[d]}` : '', g.F.lord[d] === me ? 'Tu vasallo' : '', g.F.lord[me] === d ? 'Tu señor' : '', wed ? 'Boda' : '', emb ? 'Embargo' : '', `Era ${E.ERAS[E.era(g, d)].name.toLowerCase()}`].filter(Boolean);
   openSheet({title:g.F.name[d], body:`
     <div class="fhead">${c.flagOf(d, 'md')}<div><span class="chip ${STATUS_CLS[st]}">${E.STATUS_NAME[st]}${st === E.PACT ? ' · hasta el turno ' + g.until[me][d] : ''}</span>
       <p class="note">${cnt[d]} provincias · fuerza ${E.strength(g, d)} (tú ${E.strength(g, me)}) · relación ${g.rel[me][d]}${chips.length ? ' · ' + chips.join(' · ') : ''}</p></div></div>
     <div class="grp">${opts.map(([k, n, sub]) => {
-      const pick = k === 'ultimatum' || k === 'comprar';
+      const pick = k === 'ultimatum' || k === 'comprar' || k === 'tratado';
       const w = k.startsWith('regalo') || k === 'guerra' || k === 'embargo' || pick ? null : E.wouldAccept(geo, g, me, d, k);
       return `<button class="rowi" data-k="${k}">${icon(k === 'guerra' ? 'swords' : 'flag')}<div class="l">${n}<small>${w ? `<b class="${w.ok ? 'ok' : 'no'}">${w.ok ? 'Aceptará' : 'Rechazará'}</b> · ${esc(w.why)}` : esc(sub)}</small></div>${pick ? icon('chev') : ''}</button>`;
     }).join('')}</div>`,
     mount:el => each(el, '[data-k]', b => {
       const k = b.dataset.k || '';
       if (k === 'ultimatum' || k === 'comprar') { closeSheet(); setTimeout(() => provincePicker(c, d, k), 300); return; }
+      if (k === 'tratado') { closeSheet(); setTimeout(() => treatySheet(c, d), 300); return; }
       const a = k.startsWith('regalo') ? {type:'diplo', f:me, d, kind:'regalo', amount:k === 'regalo2' ? E.COST.gift[1] : E.COST.gift[0]} : {type:'diplo', f:me, d, kind:k};
       send(c, a, d, k);
     })});
@@ -235,15 +268,22 @@ export function economySheet(c) {
       ${tr.routes.length ? line('Comercio', tr.trade, tr.routes.map(x => g.F.name[x]).join(', ')) : ''}
       ${tr.tribute ? line('Tributo de tus vasallos', tr.tribute) : ''}
       ${tr.paid ? line('Tributo a tu señor', -tr.paid) : ''}
+      ${tr.indias ? line('Flota de Indias', tr.indias, 'Cuidado con los piratas si tienes menos de 5 barcos') : ''}
       ${line('Mantenimiento del ejército', -tr.upkeep, `${g.F.ships[me]} barcos · la guarnición de cada provincia es gratis`)}
+      ${tr.mercs ? line('Mercenarios', -tr.mercs) : ''}
       <div class="rowi total"><div class="l"><b>Por turno</b></div><b class="num ${tr.total < 0 ? 'neg' : ''}">${tr.total >= 0 ? '+' : '−'}${Math.abs(tr.total)}</b></div>
     </div>
     ${g.F.weary[me] ? `<p class="note">Cansancio de guerra ${g.F.weary[me]} %: menos oro, ataque y lealtad. Baja en paz.</p>` : ''}
+    <div class="glabel">Recursos</div>
+    <div class="grp"><button class="rowi" id="eMkt"><div class="l"><div class="chips res-row">${E.RES.map(r => `<span class="chip ro">${rico(r)}<b class="num">${g.F.res[me][r]}</b></span>`).join('')}</div><small>Mercado: comprar y vender, producción y consumo</small></div>${icon('chev')}</button></div>
     <div class="glabel">Era y saberes</div>
     <div class="grp"><button class="rowi" id="eSab">${glyph(SAB_ICON.libro, 'sab s4')}<div class="l">${E.ERAS[er].name} · ${g.F.know[me].length} saberes<small>Saber ${g.F.rp[me]} (+${E.saberGain(geo, g, me)} por turno). Abre el árbol de saberes.</small></div>${icon('chev')}</button></div>
     <div class="glabel">Provincias</div>
     <div class="grp">${rows.map(r => `<div class="rowi">${sico(geo.spec[r.p])}<div class="l">${esc(c.pname(r.p))}<small>${E.SPECIALTIES[/** @type {'vino'} */ (geo.spec[r.p])].name} · ${E.TAXES[g.P.tax[r.p] ?? 1].name.toLowerCase()} · ${r.gr ? '+' + r.gr + ' tropas/turno' : 'no crece'}${!sup[r.p] ? ' · sin suministro' : ''}${g.P.loyal[r.p] < 30 ? ' · poco leal' : ''}${g.P.cult[r.p] !== g.F.cult[me] ? ' · otra cultura' : ''}</small></div><b class="num">+${r.v}</b></div>`).join('')}</div>`,
-    mount:el => { const b = el.querySelector('#eSab'); if (b) /** @type {HTMLElement} */ (b).onclick = () => { closeSheet(); setTimeout(() => saberSheet(c), 300); }; }});
+    mount:el => {
+      const b = el.querySelector('#eSab'); if (b) /** @type {HTMLElement} */ (b).onclick = () => { closeSheet(); setTimeout(() => saberSheet(c), 300); };
+      const m = el.querySelector('#eMkt'); if (m) /** @type {HTMLElement} */ (m).onclick = () => { closeSheet(); setTimeout(() => marketSheet(c), 300); };
+    }});
 }
 
 /* ======================= Informe de provincia ======================= */
@@ -265,6 +305,7 @@ export function reportSheet(c, p) {
     ${mine ? block('Tropas por turno', gr, `Crecimiento|+${gr.total}`, `Tope ${E.cap(geo, g, p)} tropas`) : ''}
     ${mine ? block('Lealtad', loy, `Cada turno|${loy.total >= 0 ? '+' : '−'}${Math.abs(loy.total)}`, `Ahora ${g.P.loyal[p]} de 100. Por debajo de 30 rinde la mitad; por debajo de 20 puede rebelarse.`) : ''}
     ${block('Defensa', def, `Multiplicador|×${fmt(def.total / 100, 2)}`, 'Se aplica a cada tropa (infantería 100 %, caballería 90 %, artillería 70 %, milicia 95 %) más la postura.')}
+    ${mine ? popBlock(c, p) : ''}
     ${g.P.cult[p] !== (o >= 0 ? g.F.cult[o] : g.P.cult[p]) ? `<div class="glabel">Cultura</div><div class="grp"><div class="rowi"><div class="l">Asimilando · ${g.P.assim[p]} de 24 turnos<small>Mientras tanto: −20 % de oro y −3 de lealtad por turno</small></div></div></div>` : ''}
     ${bs.length && (mine || c.visibleSet().has(p)) ? `<div class="glabel">Edificios</div><div class="grp">${bs.map(([b, l]) => { const info = E.BUILDINGS[/** @type {E.Building} */ (b)]; return `<div class="rowi bl">${buildArt(b, 'sm', l)}<div class="l">${info.name} · nivel ${l}<small>${esc(info.desc[l - 1])}</small></div></div>`; }).join('')}</div>` : ''}`});
 }
@@ -361,14 +402,14 @@ function powerBody(c) {
 }
 /**
  * Gobierno: diplomacia, consejo (ministros, misión) y poder (ranking).
- * @param {Conquest} c @param {'dip'|'council'|'power'} [tab]
+ * @param {Conquest} c @param {'dip'|'council'|'power'|'corte'|'goals'} [tab]
  */
 export function govSheet(c, tab = 'dip') {
   c.hooks.onEvent?.('diplomacy');
   const g = c.g, me = c.me;
   const adv = advice(c), mis = g.missions.find(m => m.f === me);
   const misText = mis ? `${c.missionText(mis)} antes del turno ${mis.until} · +${mis.reward} de oro` : 'Ahora no tienes ninguna. Llegan de vez en cuando.';
-  const body = tab === 'dip' ? diplomacyBody(c) : tab === 'power' ? powerBody(c) : `
+  const body = tab === 'dip' ? diplomacyBody(c) : tab === 'power' ? powerBody(c) : tab === 'corte' ? courtBody(c) : tab === 'goals' ? goalsBody(c) : `
     <div class="glabel">Misión</div><div class="grp"><div class="rowi">${icon('target')}<div class="l">${mis ? 'En curso' : 'Sin misión'}<small>${esc(misText)}</small></div></div></div>
     <div class="glabel">Consejo de ministros</div>
     <div class="grp council">${Object.entries(E.MINISTER_ROLES).map(([k, n]) => {
@@ -376,9 +417,10 @@ export function govSheet(c, tab = 'dip') {
       return `<div class="rowi min"><span class="bust" aria-hidden="true">${esc(m.name.split(' ')[1]?.[0] || 'M')}</span><div class="l">${esc(m.name)} · ${n}<small>${esc(trait)}</small><em class="adv">«${esc(adv[k])}»</em></div><button class="btn sm ghost" data-min="${k}" ${g.F.gold[me] >= E.MINISTER_COST ? '' : 'disabled'}>Cambiar · ${E.MINISTER_COST}</button></div>`;
     }).join('')}</div>`;
   openSheet({title:'Gobierno', body:`
-    <div class="seg tabs" role="tablist">${[['dip', 'Diplomacia'], ['council', 'Consejo'], ['power', 'Poder']].map(([k, n]) => `<button role="tab" data-tab="${k}" aria-pressed="${tab === k}">${n}</button>`).join('')}</div>
+    <div class="seg tabs t5" role="tablist">${[['corte', 'Corte'], ['dip', 'Diplomacia'], ['council', 'Consejo'], ['goals', 'Objetivos'], ['power', 'Poder']].map(([k, n]) => `<button role="tab" data-tab="${k}" aria-pressed="${tab === k}">${n}</button>`).join('')}</div>
     <div class="tabb">${body}</div>`,
     mount:el => {
+      if (tab === 'corte') courtMount(c, el, () => govSheet(c, 'corte'));
       each(el, '[data-tab]', b => { sound('tap'); govSheet(c, /** @type {any} */ (b.dataset.tab)); });
       each(el, '[data-f]', b => { closeSheet(); setTimeout(() => factionSheet(c, +(b.dataset.f || 0)), 300); });
       each(el, '[data-min]', b => { const k = b.dataset.min || ''; if (c.act({type:'minister', f:me, k})) { sound('lock'); closeSheet(); toast(`Nuevo ministro de ${/** @type {Record<string, string>} */ (E.MINISTER_ROLES)[k]}: ${c.g.F.min[me][k].name}`); setTimeout(() => govSheet(c, 'council'), 300); } });
@@ -391,9 +433,10 @@ export function govSheet(c, tab = 'dip') {
  * @param {Conquest} c @param {{id:number, kind:string, p:number}} d @returns {Promise<number|null>}
  */
 export function decisionSheet(c, d) {
-  const info = /** @type {Record<string, {title:string, text:string, opts:string[]}>} */ (E.DECISIONS)[d.kind];
+  const info = /** @type {Record<string, {title:string, text:string, opts:string[]}>} */ ({...E.DECISIONS, ...E.STORY})[d.kind];
+  if (!info) return Promise.resolve(null);
   return new Promise(res => openSheet({title:'Decisión', close:() => res(null), body:`
-    <h4 class="brief-t">${esc(info.title.replace('{P}', c.pname(d.p)))}</h4>
+    <h4 class="brief-t">${esc(info.title.replace('{P}', d.p >= 0 ? c.pname(d.p) : '').replace('{C}', E.communityOf(c.geo.ine[d.p] || '')?.name || 'la región'))}</h4>
     <p class="brief-p">${esc(info.text)}</p>
     <div class="grp">${info.opts.map((o, i) => `<button class="rowi" data-o="${i}"><div class="l">${esc(o)}</div>${icon('chev')}</button>`).join('')}</div>
     <p class="note">Si no decides, al terminar el turno se toma la última opción.</p>`,

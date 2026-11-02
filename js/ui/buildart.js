@@ -109,6 +109,11 @@ const ART = {
     + P('M-17 2v6h5v-6a2.5 2.5 0 0 0-5 0ZM12 2v6h5v-6a2.5 2.5 0 0 0-5 0Z', '#5FA0E0', .7) + L('M-18 8h7M11 8h7', '#3E8E4E', 1.4)
     + P('M-5 14V5a5 5 0 0 1 10 0v9Z', '#3E8E4E') + P('M-3 -11h6v4h4v6h-4v4h-6v-4h-4v-6h4Z', '#D63A3A', .9)
     + P('M20 22a3 2 0 1 0 6 0a3 2 0 1 0-6 0ZM-26 21a3 2 0 1 0 6 0a3 2 0 1 0-6 0Z', '#5C8A36', .8),
+  audiencia:() => ground('#C9C2A6')
+    + P('M-24 -2 0 -14 24 -2Z', '#B5432F') + F('M0 -14 24 -2H12Z', 'rgba(0,0,0,.18)')
+    + P('M-22 -2h44v18h-44Z', STONE) + L('M-16 -2v18M-8 -2v18M8 -2v18M16 -2v18', STONE3, 1.8)
+    + P('M-4 16V6a4 4 0 0 1 8 0v10Z', WOOD2) + P('M-5 -12h10v8c0 3-2.4 5-5 6-2.6-1-5-3-5-6Z', '#C23B32', .8) + P('M-2.5 -9h5v2h-5Z', '#F2C94C', .5)
+    + P('M-26 16h52v3h-52Z', STONE2, .9) + flag(-22, -2, '#F2C94C') + flag(22, -2, '#C23B32'),
   maravilla:() => ground('#D7C48C')
     + P('M-18 -4a18 16 0 0 1 36 0Z', '#F2C94C') + F('M0 -20a18 16 0 0 1 18 16H8Z', 'rgba(0,0,0,.14)') + L('M0 -20v-6', O, 1.1) + P('M-2 -28h4v2h-4Z', '#F2C94C', .7)
     + P('M-26 -4h52v4h-52Z', STONE2, .9) + P('M-24 0h48v14h-48Z', STONE) + L('M-18 0v14M-10 0v14M10 0v14M18 0v14', STONE3, 1.6)
@@ -117,11 +122,29 @@ const ART = {
 };
 
 /** Ilustración de un edificio (o 'maravilla'). @param {string} k @param {string} [cls] @param {number} [lvl] */
-export function buildArt(k, cls = '', lvl = 0) {
-  const draw = ART[k] || ART.almacen;
-  // al nivel 3, sello dorado
-  return `<svg class="bart ${cls}" viewBox="-32 -32 64 64" aria-hidden="true">${draw()}${lvl >= 3 ? '<g transform="translate(22 -22)"><circle r="6.5" fill="#F2C94C" stroke="#2B1A0C" stroke-width="1"/><path d="M-3 1.5h6l.8-4-2 1.6L0-3.6-1.8-.9-3.8-2.5Z" fill="#2B1A0C"/></g>' : ''}</svg>`;
+/** Andamios y grúa encima de una obra. */
+const SCAFFOLD = `<g opacity=".92"><path d="M-22 18V-18M-8 18V-22M8 18V-22M22 18V-18M-24-6h48M-24 6h48M-10-18h20" stroke="#8A6234" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+  <path d="M-22 18-8 6M8 6l14 12M-22-6-8-18M8-18l14 12" stroke="#A47B45" stroke-width="1" fill="none"/>
+  <path d="M14-22V-30h14" stroke="#5E4022" stroke-width="2" fill="none"/><path d="M26-30v10" stroke="#2B1A0C" stroke-width=".8"/><rect x="23.5" y="-20" width="5" height="4" fill="#C9AE82" stroke="#2B1A0C" stroke-width=".6"/></g>`;
+/** Grietas y humo de un edificio dañado (asedio). */
+const DAMAGE = `<g><path d="M-6-8-2-2-5 4M8-12l-3 6 3 4" stroke="#1E140A" stroke-width="1.2" fill="none"/>
+  <circle cx="-10" cy="-20" r="5" fill="#5A5550" opacity=".55"/><circle cx="-6" cy="-26" r="4" fill="#6E6862" opacity=".45"/><circle cx="-2" cy="-31" r="3" fill="#86807A" opacity=".35"/></g>`;
+/**
+ * Ilustración de un edificio (o 'maravilla'). Con el nivel crece: alas a los lados y, al 3, estandarte dorado.
+ * @param {string} k @param {string} [cls] @param {number} [lvl] @param {'obras'|'dañado'|''} [state]
+ */
+export function buildArt(k, cls = '', lvl = 0, state = '') {
+  return `<svg class="bart ${cls}" viewBox="-32 -32 64 64" aria-hidden="true">${artBody(k, lvl, state || (cls.includes('obras') ? 'obras' : ''))}</svg>`;
 }
-/** El dibujo sin envoltorio (para el mapa). @param {string} k */
-export const buildArtRaw = k => (ART[k] || ART.almacen)();
+/** @param {string} k @param {number} lvl @param {string} state */
+function artBody(k, lvl, state) {
+  const draw = ART[k] || ART.almacen;
+  // niveles: alas (copias pequeñas detrás) que hacen del edificio un complejo
+  const wing = (/** @type {number} */ x) => `<g transform="translate(${x} -7) scale(.5)" opacity=".95">${draw()}</g>`;
+  const back = lvl >= 3 ? wing(-20) + wing(20) : lvl >= 2 ? wing(-19) : '';
+  const crest = lvl >= 3 ? '<g transform="translate(22 -24)"><path d="M0 8V-6" stroke="#2B1A0C" stroke-width="1.2"/><path d="M0-6h8l-2 2.6 2 2.6H0Z" fill="#F2C94C" stroke="#2B1A0C" stroke-width=".7"/></g>' : '';
+  return back + `<g ${lvl >= 2 ? 'transform="translate(0 3) scale(.92)"' : ''}>${draw()}</g>` + crest + (state === 'obras' ? SCAFFOLD : state === 'dañado' ? DAMAGE : '');
+}
+/** El dibujo sin envoltorio (para el mapa). @param {string} k @param {number} [lvl] @param {string} [state] */
+export const buildArtRaw = (k, lvl = 1, state = '') => artBody(k, lvl, state);
 export const ART_KEYS = Object.keys(ART);
