@@ -8,7 +8,7 @@ const CORE = [
   './js/net/transport.js', './js/net/warroom.js', './js/net/board.js',
   './js/ui/dom.js', './js/ui/clock.js', './js/ui/wheel.js', './js/ui/dice.js', './js/ui/play.js', './js/ui/drivers.js',
   './js/ui/menu.js', './js/ui/settings.js', './js/ui/warlobby.js', './js/ui/board.js',
-  './js/conquest/data.js', './js/conquest/rules.js', './js/conquest/engine.js', './js/conquest/turn.js', './js/conquest/scenarios.js', './js/conquest/medals.js', './js/conquest/campaign.js', './js/conquest/newgame.js',
+  './js/conquest/data.js', './js/conquest/rules.js', './js/conquest/realm.js', './js/conquest/armies.js', './js/conquest/story.js', './js/conquest/engine.js', './js/conquest/turn.js', './js/conquest/scenarios.js', './js/conquest/medals.js', './js/conquest/campaign.js', './js/conquest/newgame.js',
   './js/ui/conquest.js', './js/ui/warsheets.js', './js/ui/glyphs.js', './js/ui/buildart.js', './js/ui/overlay.js', './js/ui/gestures.js', './js/ui/warsetup.js', './js/ui/flageditor.js', './js/ui/chronicle.js', './js/ui/medals.js', './js/ui/tutorial.js',
 ];
 

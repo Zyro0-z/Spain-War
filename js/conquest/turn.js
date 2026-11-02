@@ -9,6 +9,7 @@ import {
   doAction, declareWar, setStatus, relAdd, emit, clamp, eliminate, encode, checkVictory, wouldAccept, generalsOf, generalAt,
   buildCost, unitCost, loyaltyParts, saberCost, saberGold, saberOpen, saberGain, knows, SABERES, shipCost, season, effectOn, provincesOf, RuleError, era, hasWonder, minister, fortified,
   addUnits, removeTroops, applyDecision, friendly, allied, seaReach, maxGenerals, upkeepOf,
+  realmUpkeep, realmAI, armyUpkeep, armiesOf, disband, law, storyUpkeep, treatyOk, treatyDemand, treatyRoom, warScore,
 } from './engine.js';
 import {WONDERS} from './rules.js';
 
@@ -64,9 +65,10 @@ export function resolveTurn(geo, g0, orders, drop = []) {
 /** Copia limpia de una orden recibida por la red (solo campos conocidos y con su tipo). @param {any} a @param {number} f */
 export function cleanAction(a, f) {
   /** @type {any} */ const o = {type:typeof a?.type === 'string' ? a.type.slice(0, 12) : '', f};
-  for (const k of ['from', 'to', 'n', 'p', 'd', 'amount', 'i', 'q', 't', 'tac', 's', 'lvl', 'opt', 'id']) if (a?.[k] != null && Number.isFinite(+a[k])) o[k] = Math.floor(+a[k]);
+  for (const k of ['from', 'to', 'n', 'p', 'd', 'amount', 'i', 'q', 't', 'tac', 's', 'lvl', 'opt', 'id', 'army']) if (a?.[k] != null && Number.isFinite(+a[k])) o[k] = Math.floor(+a[k]);
   for (const k of ['b', 'k', 'skill', 'kind']) if (typeof a?.[k] === 'string') o[k] = a[k].slice(0, 16);
-  for (const k of ['gen', 'accept']) if (a?.[k] != null) o[k] = !!a[k];
+  for (const k of ['gen', 'accept', 'carga', 'reserva', 'retirada', 'vas', 'paso']) if (a?.[k] != null) o[k] = !!a[k];
+  if (Array.isArray(a?.ps)) o.ps = a.ps.slice(0, 60).map((/** @type {any} */ v) => Math.floor(+v) || 0);
   if (Array.isArray(a?.x) && a.x.length === 2) o.x = [Math.floor(+a.x[0]), Math.floor(+a.x[1])];
   if (Array.isArray(a?.u) && a.u.length === 4) o.u = a.u.map((/** @type {any} */ v) => Math.max(0, Math.floor(+v) || 0));
   return o;
@@ -92,6 +94,7 @@ function neighbours(geo, g, f) {
 /** @param {Geo} geo @param {Game} g @param {number} f */
 export function aiTurn(geo, g, f) {
   const diff = g.rules.difficulty;
+  realmAI(geo, g, f);
   aiDiplomacy(geo, g, f, diff);
   aiGovern(geo, g, f, diff);
   aiEconomy(geo, g, f, diff);
@@ -116,6 +119,16 @@ function aiDiplomacy(geo, g, f, diff) {
     if (!losing && !(diff === 'facil' && g.humans.includes(e) && g.rel[f][e] > -60)) continue;
     if (g.humans.includes(e)) { if (int(g.rng, 100) < 35) offer(e, 'paz'); }
     else if (wouldAccept(geo, g, f, e, 'paz').ok) { setStatus(g, f, e, PEACE); emit(g, {t:'accept', a:e, b:f, kind:'paz'}); }
+  }
+  // paz con cláusulas: el que va ganando pide provincias de la frontera
+  for (let e = 0; e < R; e++) {
+    if (e === f || !g.F.alive[e] || g.st[f][e] !== WAR || warScore(g, f, e) < 25 || int(g.rng, 100) >= 25) continue;
+    const ps = [];
+    const border = provincesOf(g, e).filter(p => p !== g.F.capital[e] && geo.adj[p].some(q => g.P.owner[q] === f)).sort((a, b) => geo.tier[b] - geo.tier[a] || a - b);
+    for (const p of border) { if (treatyDemand(geo, {ps:[...ps, p]}) <= treatyRoom(g, f, e)) ps.push(p); if (ps.length >= 2) break; }
+    if (!ps.length) continue;
+    if (g.humans.includes(e)) { if (!g.offers.some(o => o.from === f && o.to === e && o.kind === 'tratado')) { g.offers.push({from:f, to:e, kind:'tratado', turn:g.turn, ps}); emit(g, {t:'offer', a:f, b:e, kind:'tratado'}); } }
+    else if (treatyOk(geo, g, f, e, {ps}).ok) tryAct(geo, g, {type:'diplo', f, d:e, kind:'tratado', ps});
   }
   if (diff === 'facil') return;
   // líder del mapa: coalición
@@ -384,6 +397,7 @@ function upkeep(geo, g) {
       let lost = 0;
       for (const p of ps) { const v = Math.max(1, Math.floor(g.P.troops[p] * 15 / 100)); if (g.P.troops[p] > v) { removeTroops(g, p, v); lost += v; } }
       if (lost) emit(g, {t:'bancarrota', f, v:lost});
+      for (const a of armiesOf(g, f)) if (a.merc) { emit(g, {t:'mercsgo', f, name:a.name}); disband(g, a); }
     }
   }
   // crecimiento (infantería)
@@ -395,6 +409,10 @@ function upkeep(geo, g) {
     const gr = growth(geo, g, p, sup.get(f)), top = cap(geo, g, p);
     if (g.P.troops[p] < top) addUnits(g, p, INF, Math.min(gr, top - g.P.troops[p]));
   }
+  // el reino por dentro y los ejércitos de campaña
+  realmUpkeep(geo, g);
+  armyUpkeep(geo, g);
+  storyUpkeep(geo, g);
   // lealtad, cultura y revueltas
   for (let p = 0; p < geo.n; p++) {
     const f = g.P.owner[p]; if (f < 0 || f === R) continue;
@@ -402,7 +420,7 @@ function upkeep(geo, g) {
     const up = loyaltyParts(geo, g, p, false).total;
     g.P.loyal[p] = clamp(g.P.loyal[p] + up, 0, 100);
     if (foreign) {
-      g.P.assim[p] += hasWonder(g, f, 'mezquita') ? 2 : 1;
+      g.P.assim[p] += (hasWonder(g, f, 'mezquita') ? 2 : 1) * (g.F.laws && law(g, f, 'fueros') === 1 ? 2 : 1);
       if (g.P.assim[p] >= 24) { g.P.cult[p] = g.F.cult[f]; g.P.assim[p] = 0; emit(g, {t:'assim', f, p}); }
     } else g.P.assim[p] = 0;
     const calm = lvl(g, p, 'catedral') >= 2 || hasWonder(g, f, 'merida');
@@ -417,12 +435,17 @@ function upkeep(geo, g) {
   }
   // asedios: brecha en las murallas y hambre dentro
   g.sieges = g.sieges.filter(s => g.P.owner[s.from] === s.f && attackers(g, s.from) >= 5 && g.P.owner[s.p] >= 0 && g.P.owner[s.p] !== s.f && (g.P.owner[s.p] === R || g.st[s.f][g.P.owner[s.p]] === WAR));
-  for (const s of g.sieges) {
-    s.breach += 1 + (g.P.u[s.from][ART] >= 3 ? 1 : 0) + (minister(g, s.f, 'guerra', 'ingeniero') ? 1 : 0);
-    const v = Math.max(g.P.troops[s.p] > 1 ? 1 : 0, Math.floor(g.P.troops[s.p] * 10 / 100));
+  for (const s of [...g.sieges]) {
+    const mode = s.mode || 'asedio';
+    // asedio: brecha; minar: brecha doble con bajas propias; bloqueo: hambre dentro hasta la rendición
+    if (mode !== 'bloqueo') s.breach += (mode === 'minar' ? 2 : 1) + (g.P.u[s.from][ART] >= 3 ? 1 : 0) + (minister(g, s.f, 'guerra', 'ingeniero') ? 1 : 0);
+    if (mode === 'minar') removeTroops(g, s.from, Math.max(1, Math.floor(g.P.troops[s.from] * 5 / 100)));
+    let pct = mode === 'bloqueo' ? 5 : 10;
+    if (mode === 'bloqueo') { s.food = (s.food ?? 3) - 1; if (s.food <= 0) { pct = 25; g.P.loyal[s.p] = Math.max(0, g.P.loyal[s.p] - 10); } }
+    const v = Math.max(g.P.troops[s.p] > 1 ? 1 : 0, Math.floor(g.P.troops[s.p] * pct / 100));
     if (v) removeTroops(g, s.p, v);
     g.P.loyal[s.p] = Math.max(0, g.P.loyal[s.p] - 10);
-    emit(g, {t:'siegeup', f:s.f, p:s.p, breach:s.breach, v});
+    emit(g, {t:'siegeup', f:s.f, p:s.p, breach:s.breach, v, food:s.food, mode});
   }
   // cansancio de guerra
   for (let f = 0; f < nf; f++) {

@@ -18,7 +18,7 @@ const act = (g, a) => E.apply(geo, g, a).g;
 const troops = (g, p, n) => { g.P.u[p] = [n, 0, 0, 0]; g.P.troops[p] = n; g.P.ready[p] = n; };
 
 test('el motor no usa DOM, azar del sistema ni funciones que cambian entre navegadores', () => {
-  for (const f of ['engine.js', 'turn.js', 'scenarios.js', 'data.js']) {
+  for (const f of ['engine.js', 'turn.js', 'scenarios.js', 'data.js', 'realm.js', 'armies.js', 'story.js']) {
     const src = fs.readFileSync(new URL('../js/conquest/' + f, import.meta.url), 'utf8').replace(/\/\/.*$/gm, '');
     assert.doesNotMatch(src, /Math\.(random|pow|log|exp|sqrt|sin|cos|atan|hypot)|Date\.|document\.|window\./, f);
   }
@@ -59,7 +59,8 @@ test('atacar: probabilidad exacta, conquista, guerra declarada y moral', () => {
   const me = P('Madrid'), to = P('Segovia');
   troops(g, me, 60);
   const o = E.odds(geo, g, me, me, to, 50);
-  assert.equal(o.p, winProb(o.SA, o.SD).p);
+  const [a, b, c] = o.phases.map(x => winProb(x.SA, x.SD).p);
+  assert.equal(o.p, a * b + (a * (1 - b) + (1 - a) * b) * c, 'dos de tres fases, cada una exacta');
   g = act(g, {type:'attack', f:me, from:me, to, n:50});
   const ev = g.log.find(e => e.t === 'attack');
   assert.equal(g.st[me][to], E.WAR, 'atacar declara la guerra');
@@ -97,6 +98,9 @@ test('reclutar, construir, mejorar y contratar cuestan oro', () => {
   assert.equal(g.F.gold[me], 500 - 10 * price);
   const gold0 = g.F.gold[me], c1 = E.buildCost(geo, g, me, me, 'cuartel');
   g = act(g, {type:'build', f:me, p:me, b:'cuartel'});
+  assert.equal(E.lvl(g, me, 'cuartel'), 0, 'la obra tarda');
+  assert.equal(g.P.queue[me].length, 1);
+  E.finishQueues(g);
   assert.equal(E.lvl(g, me, 'cuartel'), 1);
   assert.equal(g.F.gold[me], gold0 - c1);
   assert.ok(E.buildCost(geo, g, me, me, 'cuartel') > c1, 'subir de nivel cuesta más');

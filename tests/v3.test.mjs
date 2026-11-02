@@ -14,6 +14,10 @@ const game = (o = {}) => E.createGame(geo, scenario(map, 'las47', colors), {seed
 const act = (g, a) => E.apply(geo, g, a).g;
 const troops = (g, p, v) => { g.P.u[p] = [...v]; g.P.troops[p] = v[0] + v[1] + v[2] + v[3]; g.P.ready[p] = g.P.troops[p]; };
 const M = P('Madrid'), TO = P('Toledo'), VA = P('Valencia');
+/** Recursos de sobra para las pruebas que no van de recursos. */
+const rich = g => { g.F.res = g.F.res.map(() => ({grano:999, madera:999, hierro:999, caballos:999, polvora:999})); return g; };
+/** Construye y termina la obra al momento. */
+const build = (g, a) => { const r = act(g, a); E.finishQueues(r); return r; };
 
 test('las tablas de reglas no usan azar del sistema ni el DOM', () => {
   const src = fs.readFileSync(new URL('../js/conquest/rules.js', import.meta.url), 'utf8').replace(/\/\/.*$/gm, '');
@@ -21,21 +25,24 @@ test('las tablas de reglas no usan azar del sistema ni el DOM', () => {
 });
 
 test('edificios: niveles, huecos, costa, montaña y era', () => {
-  let g = game(); const f = M; g.F.gold[f] = 1000;
+  let g = rich(game()); const f = M; g.F.gold[f] = 1000;
   g = act(g, {type:'build', f, p:M, b:'granja'});
   g = act(g, {type:'build', f, p:M, b:'granja'});
+  assert.equal(g.P.queue[M].length, 2, 'dos obras en cola');
+  assert.throws(() => act(g, {type:'build', f, p:M, b:'granja'}), /máximo|dos obras/);
+  E.finishQueues(g);
   assert.equal(E.lvl(g, M, 'granja'), 2, 'mejorar sube de nivel');
   assert.equal(E.buildingsAt(g, M).length, 1, 'mejorar no ocupa hueco nuevo');
   assert.throws(() => act(g, {type:'build', f, p:M, b:'puerto'}), /costa/);
   assert.throws(() => act(g, {type:'build', f, p:M, b:'universidad'}), /Renacimiento/);
   const n = E.slots(geo, g, M);
-  for (const b of ['mercado', 'cuartel', 'fortaleza', 'catedral', 'torre', 'caminos', 'muralla'].slice(0, n - 1)) g = act(g, {type:'build', f, p:M, b});
+  for (const b of ['mercado', 'cuartel', 'fortaleza', 'catedral', 'torre', 'caminos', 'muralla'].slice(0, n - 1)) g = build(g, {type:'build', f, p:M, b});
   assert.equal(E.buildingsAt(g, M).length, n);
   assert.throws(() => act(g, {type:'build', f, p:M, b:'caminos'}), /huecos/);
 });
 
 test('tropas: precio por tipo, artillería con el Renacimiento y tope de guarnición', () => {
-  let g = game(); g.F.gold[M] = 1000;
+  let g = rich(game()); g.F.gold[M] = 1000;
   const before = g.F.gold[M];
   g = act(g, {type:'recruit', f:M, p:M, n:2, t:E.CAB});
   assert.equal(before - g.F.gold[M], 2 * E.unitCost(geo, g, M, M, E.CAB));
@@ -102,9 +109,11 @@ test('maravilla: una por sitio y suma a la puntuación', () => {
   let g = game();
   const site = geo.wonderSite.findIndex(w => w === 'acueducto');
   assert.ok(site >= 0);
-  const f = g.P.owner[site]; g.F.gold[f] = 500; g.humans = [f];
+  const f = g.P.owner[site]; g.F.gold[f] = 500; g.humans = [f]; rich(g);
   const s0 = E.score(g, f);
   g = act(g, {type:'wonder', f, p:site});
+  assert.ok(!E.hasWonder(g, f, 'acueducto'), 'tarda 5 turnos');
+  E.finishQueues(g);
   assert.ok(E.hasWonder(g, f, 'acueducto'));
   assert.ok(E.score(g, f) > s0);
   assert.throws(() => act(g, {type:'wonder', f, p:site}), /maravilla/);
@@ -121,7 +130,7 @@ test('flota: astillero en Valencia con el Renacimiento', () => {
   let g = E.createGame(geo, scenario(map, 'las47', colors), {seed:'F', humans:[VA], rules:{difficulty:'facil', events:false}});
   g.F.gold[VA] = 1000; g.F.know[VA] = ['calzadas', 'herreria', 'cancilleria', 'correos', 'gremios'];
   assert.equal(E.era(g, VA), 1);
-  g = act(g, {type:'build', f:VA, p:VA, b:'astillero'});
+  rich(g); g = build(g, {type:'build', f:VA, p:VA, b:'astillero'});
   g = act(g, {type:'ships', f:VA, p:VA, n:2});
   assert.equal(g.F.ships[VA], 2);
   assert.throws(() => act(g, {type:'ships', f:VA, p:VA, n:1}), /trabajado/);
@@ -136,7 +145,8 @@ test('migración: una partida v2 pasa a v4 sin perder tropas ni edificios', () =
   v2.F.tech[M] = [1, 2, 0, 0];
   for (const k of ['sieges', 'decisions', 'decSeq', 'missions', 'weds', 'embargo']) delete v2[k];
   const up = E.upgradeGame(geo, v2);
-  assert.equal(up.v, 4);
+  assert.equal(up.v, 5);
+  assert.ok(up.P.pop[M] > 0 && up.F.res[M].grano > 0 && up.F.ruler[M].name, 'llega con población, recursos y rey');
   assert.deepEqual(up.F.know[M].sort(), ['calzadas', 'herreria', 'polvora'], 'los niveles pasan a saberes');
   assert.equal(E.lvl(up, M, 'cuartel'), 1);
   assert.deepEqual(up.P.u[M], [g.P.troops[M], 0, 0, 0]);
@@ -167,7 +177,8 @@ test('saberes: requisitos, era, saber acumulado y oro', () => {
   g.F.rp[M] = 999; g = act(g, {type:'research', f:M, k:'imprenta'});
   assert.equal(E.saberGain(geo, g, M), before + 3, 'la imprenta da saber');
   const r = endTurn(geo, g).g;
-  assert.equal(r.F.rp[M], g.F.rp[M] + E.saberGain(geo, g, M), 'cada turno se suma el saber');
+  assert.ok(r.F.rp[M] >= g.F.rp[M] + E.saberGain(geo, g, M), 'cada turno se suma el saber');
+  assert.ok(r.F.goals[M].find(x => x.k === 'renac').done, 'objetivo: llegar al Renacimiento');
 });
 
 test('informe: el desglose suma lo mismo que el motor', () => {
